@@ -2,10 +2,10 @@ import AVFoundation
 import CoreImage
 import UIKit
 import Combine
+import MetalKit
 
 /// All AVCaptureSession mutations run on sessionQueue; frame processing has its own queue.
 final class CameraService: NSObject, ObservableObject {
-    @Published private(set) var frame: UIImage?
     @Published private(set) var isRunning = false
     @Published private(set) var isCapturing = false
     @Published private(set) var permissionDenied = false
@@ -18,14 +18,14 @@ final class CameraService: NSObject, ObservableObject {
     private let videoOutput = AVCaptureVideoDataOutput()
     private let sessionQueue = DispatchQueue(label: "scoo.camera.session", qos: .userInitiated)
     private let frameQueue = DispatchQueue(label: "scoo.camera.frames", qos: .userInitiated)
-    private let context = CIContext(options: [.cacheIntermediates: false])
+    /// Draws the filtered live feed on the GPU; frames never touch SwiftUI state.
+    let preview = PreviewRenderer()
     private let lookLock = NSLock()
     private var selectedLook: FilmLook = .eternal
     private var captureCompletion: ((Result<Data, Error>) -> Void)?
     private var input: AVCaptureDeviceInput?
     private var position: AVCaptureDevice.Position = .back
     private var configured = false
-    private var lastFrame: CFTimeInterval = 0
     private var wantsRunning = false
     private var runtimeObserver: NSObjectProtocol?
     private var interruptionObserver: NSObjectProtocol?
@@ -81,7 +81,7 @@ final class CameraService: NSObject, ObservableObject {
         sessionQueue.async {
             guard self.wantsRunning else { return }
             do {
-                if !self.configured { try self.configure() }
+                if !self.configured { try self.configure(); self.orientConnections() }
                 if !self.session.isRunning { self.session.startRunning() }
                 self.publishRunning()
             } catch { self.fail(error.localizedDescription) }
@@ -132,7 +132,16 @@ final class CameraService: NSObject, ObservableObject {
     }
 
     private func orientConnections() {
-        for connection in [videoOutput.connection(with: .video), photoOutput.connection(with: .video)].compactMap({ $0 }) {
+        // Preview frames stay in the sensor's native orientation; captureOutput rotates/mirrors them
+        // per camera, so a swapped input can never leave the feed sideways.
+        if let connection = videoOutput.connection(with: .video) {
+            if connection.isVideoRotationAngleSupported(0) { connection.videoRotationAngle = 0 }
+            if connection.isVideoMirroringSupported {
+                connection.automaticallyAdjustsVideoMirroring = false
+                connection.isVideoMirrored = false
+            }
+        }
+        if let connection = photoOutput.connection(with: .video) {
             if connection.isVideoRotationAngleSupported(90) { connection.videoRotationAngle = 90 }
             if connection.isVideoMirroringSupported {
                 connection.automaticallyAdjustsVideoMirroring = false
@@ -156,6 +165,8 @@ final class CameraService: NSObject, ObservableObject {
                     DispatchQueue.main.async { self.zoom = 1; self.hasFlash = replacement.device.hasFlash }
                 } else if let previous { self.session.addInput(previous) }
                 self.session.commitConfiguration()
+                // Connections are rebuilt with the new input; apply again once the change is committed.
+                self.orientConnections()
             } catch { self.fail(error.localizedDescription) }
         }
     }
@@ -226,18 +237,62 @@ extension CameraService: AVCapturePhotoCaptureDelegate {
 
 extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        let now = CACurrentMediaTime()
-        guard now - lastFrame > 1.0 / 15, let buffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-        lastFrame = now
-        autoreleasepool {
-            var image = CIImage(cvPixelBuffer: buffer)
-            let scale = min(1, 640 / max(image.extent.width, image.extent.height))
-            image = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-            lookLock.lock(); let look = selectedLook; lookLock.unlock()
-            image = look.apply(to: image, finishing: false)
-            guard let cg = context.createCGImage(image, from: image.extent) else { return }
-            let frame = UIImage(cgImage: cg)
-            DispatchQueue.main.async { self.frame = frame }
+        guard let buffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        var image = CIImage(cvPixelBuffer: buffer)
+        // Only orient here when the connection really delivers native landscape frames.
+        if connection.videoRotationAngle == 0 && !connection.isVideoMirrored {
+            let front = connection.inputPorts.first?.sourceDevicePosition == .front
+            image = image.oriented(front ? .leftMirrored : .right)
         }
+        lookLock.lock(); let look = selectedLook; lookLock.unlock()
+        // Building the CIImage is only a recipe; the GPU does the work when the preview draws.
+        preview.show(look.apply(to: image, finishing: false))
+    }
+}
+
+/// Renders the newest camera frame straight into a Metal view (aspect fill).
+final class PreviewRenderer: NSObject, MTKViewDelegate {
+    private let device = MTLCreateSystemDefaultDevice()
+    private lazy var queue = device?.makeCommandQueue()
+    private lazy var context: CIContext? = device.map { CIContext(mtlDevice: $0, options: [.cacheIntermediates: false]) }
+    private let lock = NSLock()
+    private var pending: CIImage?
+
+    func show(_ image: CIImage) {
+        lock.lock(); pending = image; lock.unlock()
+    }
+
+    func makeView() -> MTKView {
+        let view = MTKView(frame: .zero, device: device)
+        view.framebufferOnly = false
+        view.colorPixelFormat = .bgra8Unorm
+        view.isOpaque = true
+        view.clearColor = MTLClearColor(red: 0.08, green: 0.10, blue: 0.09, alpha: 1)
+        view.preferredFramesPerSecond = 30
+        view.enableSetNeedsDisplay = false
+        view.isPaused = false
+        view.autoResizeDrawable = true
+        view.contentScaleFactor = min(UIScreen.main.scale, 2)
+        view.isUserInteractionEnabled = false
+        view.delegate = self
+        return view
+    }
+
+    func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) { }
+
+    func draw(in view: MTKView) {
+        lock.lock(); let image = pending; pending = nil; lock.unlock()
+        let size = view.drawableSize
+        guard let image, size.width > 0, size.height > 0, image.extent.width > 0, image.extent.height > 0,
+              let context, let drawable = view.currentDrawable, let commands = queue?.makeCommandBuffer() else { return }
+        let scale = max(size.width / image.extent.width, size.height / image.extent.height)
+        let scaled = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        let filled = scaled.transformed(by: CGAffineTransform(translationX: (size.width - scaled.extent.width) / 2 - scaled.extent.minX,
+                                                              y: (size.height - scaled.extent.height) / 2 - scaled.extent.minY))
+        let destination = CIRenderDestination(width: Int(size.width), height: Int(size.height), pixelFormat: view.colorPixelFormat,
+                                              commandBuffer: commands, mtlTextureProvider: { drawable.texture })
+        _ = try? context.startTask(toRender: filled, from: CGRect(origin: .zero, size: size), to: destination, at: .zero)
+        commands.present(drawable)
+        commands.commit()
     }
 }
