@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import PhotosUI
+import MetalKit
 
 @MainActor
 struct CameraScreen: View {
@@ -25,7 +26,8 @@ struct CameraScreen: View {
     @State private var importing = false
     @State private var moving = false
     @State private var dragPoint: CGPoint?
-    @GestureState private var dragSequenceActive = false
+    @GestureState private var pressActive = false
+    @State private var holdTask: Task<Void, Never>?
     @State private var pipeline = PhotoPipeline()
 
     private enum CameraSheet: String, Identifiable {
@@ -64,13 +66,19 @@ struct CameraScreen: View {
             .frame(width: size.width, height: size.height)
             .coordinateSpace(name: "cameraViewport")
             .offset(y: -insets.top)
-            .onChange(of: dragSequenceActive) { _, active in
-                if active && !moving {
-                    moving = true
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                }
-                if !active {
+            .onChange(of: pressActive) { _, active in
+                holdTask?.cancel()
+                if active {
+                    // Holding still for a moment picks Mori up; a quick tap never gets here.
+                    holdTask = Task {
+                        try? await Task.sleep(for: .milliseconds(350))
+                        guard !Task.isCancelled else { return }
+                        moving = true
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    }
+                } else {
                     // Reset even if iOS cancels a drag (e.g. Control Center/background).
+                    holdTask = nil
                     moving = false
                     dragPoint = nil
                 }
@@ -124,10 +132,9 @@ struct CameraScreen: View {
     private func cameraFeed(size: CGSize) -> some View {
         ZStack {
             Color(red: 0.08, green: 0.10, blue: 0.09)
-            if let frame = camera.frame {
-                Image(uiImage: frame).resizable().scaledToFill()
-                    .frame(width: size.width, height: size.height).clipped()
-            }
+            CameraPreview(renderer: camera.preview)
+                .frame(width: size.width, height: size.height)
+                .allowsHitTesting(false)
             if !camera.isRunning {
                 VStack(spacing: 17) {
                     Text("Eternal").font(.system(size: 38, weight: .regular, design: .serif)).italic()
@@ -218,32 +225,36 @@ struct CameraScreen: View {
         let resting = placement(MoriPlacement(x: savedMoriX, y: savedMoriY), size: size, insets: insets)
         let current = dragPoint ?? resting
         let viewportAspect = size.width / max(1, size.height)
-        let move = LongPressGesture(minimumDuration: 0.35, maximumDistance: 18)
-            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named("cameraViewport")))
-            .updating($dragSequenceActive) { value, state, _ in
-                if case .second(true, _) = value { state = true }
-            }
+        let slop: CGFloat = 18
+        // One gesture decides everything: short press = shutter, hold then drag = move.
+        let press = DragGesture(minimumDistance: 0, coordinateSpace: .named("cameraViewport"))
+            .updating($pressActive) { _, state, _ in state = true }
             .onChanged { value in
-                guard case .second(true, let drag) = value, let drag else { return }
-                // Use translation from the resting center, not the finger location: no jump on pickup.
-                let candidate = MoriPlacement(x: Double((resting.x + drag.translation.width) / max(1, size.width)),
-                                              y: Double((resting.y + drag.translation.height) / max(1, size.height)))
-                dragPoint = placement(candidate, size: size, insets: insets)
+                if moving {
+                    // Use translation from the resting center, not the finger location: no jump on pickup.
+                    let candidate = MoriPlacement(x: Double((resting.x + value.translation.width) / max(1, size.width)),
+                                                  y: Double((resting.y + value.translation.height) / max(1, size.height)))
+                    dragPoint = placement(candidate, size: size, insets: insets)
+                } else if hypot(value.translation.width, value.translation.height) > slop {
+                    holdTask?.cancel()   // a swipe, not a hold
+                }
             }
             .onEnded { value in
-                if case .second(true, let drag) = value, let drag {
-                    let candidate = MoriPlacement(x: Double((resting.x + drag.translation.width) / max(1, size.width)),
-                                                  y: Double((resting.y + drag.translation.height) / max(1, size.height)))
+                holdTask?.cancel()
+                if moving {
+                    let candidate = MoriPlacement(x: Double((resting.x + value.translation.width) / max(1, size.width)),
+                                                  y: Double((resting.y + value.translation.height) / max(1, size.height)))
                     let end = placement(candidate, size: size, insets: insets)
                     savedMoriX = Double(end.x / max(1, size.width))
                     savedMoriY = Double(end.y / max(1, size.height))
                     moveHintSeen = true
                     UISelectionFeedbackGenerator().selectionChanged()
+                } else if hypot(value.translation.width, value.translation.height) <= slop {
+                    takePhoto(aspect: viewportAspect)
                 }
                 moving = false
                 dragPoint = nil
             }
-        let tap = TapGesture().onEnded { takePhoto(aspect: viewportAspect) }
         return ZStack {
             MarimoView(size: moriSize, happy: processing || camera.isCapturing, floats: !moving)
                 .shadow(color: .black.opacity(0.35), radius: 9, y: 7)
@@ -259,7 +270,7 @@ struct CameraScreen: View {
         .contentShape(Circle())
         .scaleEffect(moving ? 1.10 : 1)
         .animation(.spring(response: 0.25, dampingFraction: 0.7), value: moving)
-        .gesture(move.exclusively(before: tap))
+        .gesture(press)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(garden.snapshot.name), 사진 촬영")
         .accessibilityValue("레벨 \(garden.growth.level)")
@@ -276,6 +287,7 @@ struct CameraScreen: View {
     private func takePhoto(aspect: CGFloat) {
         guard canCapture else {
             if !camera.isRunning { notify("카메라를 켜면 모리를 눌러 촬영할 수 있어요.") }
+            else if !garden.ready { notify("모리가 아직 준비 중이에요. 잠시 후 다시 눌러 주세요.") }
             return
         }
         processing = true
@@ -293,7 +305,7 @@ struct CameraScreen: View {
         guard camera.isRunning, !moving else { return }
         focusTask?.cancel()
         focusPoint = point
-        let source = camera.frame?.size ?? CGSize(width: 3, height: 4)
+        let source = CGSize(width: 3, height: 4)   // portrait photo-preset feed
         let scale = max(viewport.width / source.width, viewport.height / source.height)
         let x = (point.x + (source.width * scale - viewport.width) / 2) / (source.width * scale)
         let y = (point.y + (source.height * scale - viewport.height) / 2) / (source.height * scale)
@@ -333,4 +345,10 @@ struct CameraScreen: View {
             withAnimation { toast = nil }
         }
     }
+}
+
+private struct CameraPreview: UIViewRepresentable {
+    let renderer: PreviewRenderer
+    func makeUIView(context: Context) -> MTKView { renderer.makeView() }
+    func updateUIView(_ view: MTKView, context: Context) { }
 }
