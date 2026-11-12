@@ -12,7 +12,7 @@ struct AlbumScreen: View {
         NavigationStack {
             ScrollView {
                 if garden.snapshot.photos.isEmpty {
-                    ContentUnavailableView("아직 작은 순간을 기다려요", systemImage: "camera", description: Text("사진을 찍으면 이곳에 차곡차곡 쌓여요.")).padding(.top, 80)
+                    ContentUnavailableView("아직 작은 순간을 기다려요", systemImage: "camera", description: Text("카메라 위의 모리를 누르면 사진이 차곡차곡 쌓여요.")).padding(.top, 80)
                 } else {
                     LazyVGrid(columns: columns, spacing: 20) {
                         ForEach(garden.snapshot.photos) { photo in

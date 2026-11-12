@@ -65,7 +65,7 @@ project_common = {
 app_common = {
     'ASSETCATALOG_COMPILER_APPICON_NAME': 'AppIcon', 'CODE_SIGN_STYLE': 'Automatic',
     'CURRENT_PROJECT_VERSION': '1', 'GENERATE_INFOPLIST_FILE': 'NO', 'INFOPLIST_FILE': 'SCOO/Resources/Info.plist',
-    'LD_RUNPATH_SEARCH_PATHS': ['$(inherited)', '@executable_path/Frameworks'], 'MARKETING_VERSION': '0.1.0',
+    'LD_RUNPATH_SEARCH_PATHS': ['$(inherited)', '@executable_path/Frameworks'], 'MARKETING_VERSION': '0.2.0',
     'PRODUCT_BUNDLE_IDENTIFIER': 'com.jeongmint.scoo', 'PRODUCT_NAME': '$(TARGET_NAME)',
     'SUPPORTED_PLATFORMS': 'iphoneos iphonesimulator', 'SUPPORTS_MACCATALYST': 'NO', 'TARGETED_DEVICE_FAMILY': '1',
     'SWIFT_EMIT_LOC_STRINGS': 'YES',

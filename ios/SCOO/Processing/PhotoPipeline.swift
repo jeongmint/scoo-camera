@@ -6,7 +6,7 @@ import Photos
 actor PhotoPipeline {
     private let context = CIContext(options: [.cacheIntermediates: false])
 
-    func process(data: Data, look: FilmLook, mode: CaptureMode, dateStamp: Bool, aspectRatio: CGFloat = 3 / 4) throws -> ProcessedPhoto {
+    func process(data: Data, look: FilmLook, mode: CaptureMode, dateStamp: Bool, aspectRatio: CGFloat? = nil) throws -> ProcessedPhoto {
         guard let uiImage = UIImage(data: data) else { throw SCOOError.message("사진을 열 수 없어요.") }
         // UIKit normalizes all EXIF orientations before cropping or Vision analysis.
         let size = uiImage.size
@@ -16,7 +16,7 @@ actor PhotoPipeline {
             .image { _ in uiImage.draw(in: CGRect(x: 0, y: 0, width: size.width * scale, height: size.height * scale)) }
         guard let cg = normalized.cgImage else { throw SCOOError.message("사진을 변환하지 못했어요.") }
         let original = CIImage(cgImage: cg)
-        let targetRatio = min(2, max(0.3, aspectRatio))
+        let targetRatio = min(3, max(0.25, aspectRatio ?? (original.extent.width / original.extent.height)))
         var rect = original.extent
         if rect.width / rect.height > targetRatio {
             let width = rect.height * targetRatio

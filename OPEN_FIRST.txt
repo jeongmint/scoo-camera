@@ -1,0 +1,10 @@
+SCOO · Eternal 수정본
+
+1. ios/SCOO.xcodeproj를 Xcode로 여세요.
+2. SCOO target의 Signing & Capabilities에서 본인 Team을 선택하세요.
+3. 연결한 iPhone을 선택하고 Run(⌘R) 하세요.
+
+전체화면 카메라 / 모리 탭 촬영 / 롱탭 후 드래그 이동 / Eternal 단일 필터 포함.
+별도의 git am, rebase, bundle 복원이 필요하지 않습니다.
+이 폴더에는 Git 작업 상태(.git)가 포함되지 않습니다.
+iOS 빌드와 실기기 검증은 아직 수행하지 못했습니다.

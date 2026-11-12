@@ -20,7 +20,7 @@ final class CameraService: NSObject, ObservableObject {
     private let frameQueue = DispatchQueue(label: "scoo.camera.frames", qos: .userInitiated)
     private let context = CIContext(options: [.cacheIntermediates: false])
     private let lookLock = NSLock()
-    private var selectedLook: FilmLook = .warm
+    private var selectedLook: FilmLook = .eternal
     private var captureCompletion: ((Result<Data, Error>) -> Void)?
     private var input: AVCaptureDeviceInput?
     private var position: AVCaptureDevice.Position = .back

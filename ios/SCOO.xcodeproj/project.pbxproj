@@ -56,6 +56,16 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "5AE54610A14DC1630DEDCC20";
 		};
+		"8A2DC388B07E85604E6CF027" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "MoriPlacement.swift";
+			"sourceTree" = "<group>";
+		};
+		"A83559D5AF4FB064D6BD0D33" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "8A2DC388B07E85604E6CF027";
+		};
 		"11B8459229592A9C753923A8" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -70,7 +80,17 @@
 			"isa" = "PBXGroup";
 			"path" = "Models";
 			"sourceTree" = "<group>";
-			"children" = ("D71D9EF67C616471CD291E44", "5AE54610A14DC1630DEDCC20", "11B8459229592A9C753923A8");
+			"children" = ("D71D9EF67C616471CD291E44", "5AE54610A14DC1630DEDCC20", "8A2DC388B07E85604E6CF027", "11B8459229592A9C753923A8");
+		};
+		"8C554C68602CA36D6EA0F0E6" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "EternalPalette.swift";
+			"sourceTree" = "<group>";
+		};
+		"6B02ECF63216BC09B572EBCC" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "8C554C68602CA36D6EA0F0E6";
 		};
 		"E0E715881730C4B360BF820E" = {
 			"isa" = "PBXFileReference";
@@ -96,7 +116,7 @@
 			"isa" = "PBXGroup";
 			"path" = "Processing";
 			"sourceTree" = "<group>";
-			"children" = ("E0E715881730C4B360BF820E", "322E56F421245B2DA46F7086");
+			"children" = ("8C554C68602CA36D6EA0F0E6", "E0E715881730C4B360BF820E", "322E56F421245B2DA46F7086");
 		};
 		"C1C5079CDFE55E8D440B1981" = {
 			"isa" = "PBXFileReference";
@@ -182,6 +202,16 @@
 			"sourceTree" = "<group>";
 			"children" = ("7E8EE651441290CBA91E42A4", "92C5636BFF7C41646477BDC1", "29FE33B66C65D627CD48210D", "714A4F299836DAAA7BB36899", "6386391B12791BA9F122D793", "F795F32007D29158A4DBF78C");
 		};
+		"8143D24B34F2413E2C1EEF0C" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "EternalInteractionTests.swift";
+			"sourceTree" = "<group>";
+		};
+		"E296ED80AA9039065C68B59F" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "8143D24B34F2413E2C1EEF0C";
+		};
 		"0C190A382ADCDC5CB340D868" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -196,7 +226,7 @@
 			"isa" = "PBXGroup";
 			"path" = "SCOOTests";
 			"sourceTree" = "<group>";
-			"children" = ("0C190A382ADCDC5CB340D868");
+			"children" = ("8143D24B34F2413E2C1EEF0C", "0C190A382ADCDC5CB340D868");
 		};
 		"9DFAC27DEB27762915072A45" = {
 			"isa" = "PBXFileReference";
@@ -226,7 +256,7 @@
 		"28E30B7D232F9B4B78778CA2" = {
 			"isa" = "PBXSourcesBuildPhase";
 			"buildActionMask" = "2147483647";
-			"files" = ("663EBF9C2871382BA3D60B7A", "17FBDB7A47275EC910A6D1DD", "9B0DB28B261A4F706EAE26BB", "C41A7E9D83AE9A5774DE2C7A", "42DFAEC2D05CAE1314A244C4", "D0C042CB89A1F8A13F13A1DB", "1115CA81D46D42B9C9A85205", "857213FC95A805DAFC66B3AE", "2F16B09FDB0073D5291EE2CE", "31D69796201F2075F971A0C9", "7E0A90D896C1EFB18E1DBBE3");
+			"files" = ("663EBF9C2871382BA3D60B7A", "17FBDB7A47275EC910A6D1DD", "9B0DB28B261A4F706EAE26BB", "C41A7E9D83AE9A5774DE2C7A", "A83559D5AF4FB064D6BD0D33", "42DFAEC2D05CAE1314A244C4", "6B02ECF63216BC09B572EBCC", "D0C042CB89A1F8A13F13A1DB", "1115CA81D46D42B9C9A85205", "857213FC95A805DAFC66B3AE", "2F16B09FDB0073D5291EE2CE", "31D69796201F2075F971A0C9", "7E0A90D896C1EFB18E1DBBE3");
 			"runOnlyForDeploymentPostprocessing" = "0";
 		};
 		"DB8BF58B205897CD1F523426" = {
@@ -244,7 +274,7 @@
 		"BC240C47C5208228858FE562" = {
 			"isa" = "PBXSourcesBuildPhase";
 			"buildActionMask" = "2147483647";
-			"files" = ("DD2E8E8D8E8474C6F283643B");
+			"files" = ("E296ED80AA9039065C68B59F", "DD2E8E8D8E8474C6F283643B");
 			"runOnlyForDeploymentPostprocessing" = "0";
 		};
 		"A4857E9F6FF3D1EA05B24DE0" = {
@@ -263,7 +293,7 @@
 				"GENERATE_INFOPLIST_FILE" = "NO";
 				"INFOPLIST_FILE" = "SCOO/Resources/Info.plist";
 				"LD_RUNPATH_SEARCH_PATHS" = ("$(inherited)", "@executable_path/Frameworks");
-				"MARKETING_VERSION" = "0.1.0";
+				"MARKETING_VERSION" = "0.2.0";
 				"PRODUCT_BUNDLE_IDENTIFIER" = "com.jeongmint.scoo";
 				"PRODUCT_NAME" = "$(TARGET_NAME)";
 				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
@@ -286,7 +316,7 @@
 				"GENERATE_INFOPLIST_FILE" = "NO";
 				"INFOPLIST_FILE" = "SCOO/Resources/Info.plist";
 				"LD_RUNPATH_SEARCH_PATHS" = ("$(inherited)", "@executable_path/Frameworks");
-				"MARKETING_VERSION" = "0.1.0";
+				"MARKETING_VERSION" = "0.2.0";
 				"PRODUCT_BUNDLE_IDENTIFIER" = "com.jeongmint.scoo";
 				"PRODUCT_NAME" = "$(TARGET_NAME)";
 				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";

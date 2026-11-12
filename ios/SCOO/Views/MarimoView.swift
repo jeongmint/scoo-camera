@@ -4,6 +4,7 @@ import UIKit
 struct MarimoView: View {
     var size: CGFloat = 110
     var happy = false
+    var floats = true
     @State private var floating = false
 
     var body: some View {
@@ -38,33 +39,11 @@ struct MarimoView: View {
             context.stroke(smile, with: .color(Palette.ink), style: StrokeStyle(lineWidth: max(1, size / 140), lineCap: .round))
         }
         .frame(width: size, height: size)
-        .offset(y: floating ? -4 : 3)
-        .rotationEffect(.degrees(floating ? (happy ? 6 : 2) : -2))
+        .offset(y: floats ? (floating ? -4 : 3) : 0)
+        .rotationEffect(.degrees(floats ? (floating ? (happy ? 6 : 2) : -2) : 0))
         .animation(.easeInOut(duration: happy ? 0.3 : 2.5).repeatForever(autoreverses: true), value: floating)
         .onAppear { floating = true }
         .accessibilityLabel("보송한 초록 마리모")
-    }
-}
-
-struct JarView: View {
-    var experience: Int
-    var happy: Bool
-    var body: some View {
-        ZStack(alignment: .bottom) {
-            Ellipse().fill(Palette.moss.opacity(0.12)).frame(width: 180, height: 18).blur(radius: 5).offset(y: 7)
-            UnevenRoundedRectangle(topLeadingRadius: 16, bottomLeadingRadius: 52, bottomTrailingRadius: 52, topTrailingRadius: 16)
-                .fill(LinearGradient(colors: [.white.opacity(0.6), Color.mint.opacity(0.16), Palette.sage.opacity(0.2)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                .overlay {
-                    UnevenRoundedRectangle(topLeadingRadius: 16, bottomLeadingRadius: 52, bottomTrailingRadius: 52, topTrailingRadius: 16)
-                        .stroke(Palette.sage.opacity(0.35), lineWidth: 1)
-                }
-            Ellipse().stroke(Palette.sage.opacity(0.3)).frame(height: 18).padding(.horizontal, 4).offset(y: -180)
-            Rectangle().fill(Palette.sage.opacity(0.12)).frame(height: 145).clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 50, bottomTrailingRadius: 50))
-            MarimoView(size: min(165, 125 + CGFloat(sqrt(Double(max(0, experience)))) * 0.6), happy: happy).padding(.bottom, 9)
-            Capsule().fill(.white.opacity(0.7)).frame(width: 7, height: 95).offset(x: -78, y: -62)
-            Circle().stroke(.white.opacity(0.9), lineWidth: 1).frame(width: 5).offset(x: 57, y: -115)
-            Circle().stroke(.white.opacity(0.9), lineWidth: 1).frame(width: 4).offset(x: -49, y: -151)
-        }.frame(width: 200, height: 200)
     }
 }
 
@@ -79,7 +58,7 @@ struct GardenScreen: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 27) {
-                    Text("YOUR LITTLE DIGITAL GARDEN").font(.system(size: 9, weight: .medium, design: .monospaced)).tracking(2).foregroundStyle(Palette.sage)
+                    Text("YOUR LITTLE FLOATING FRIEND").font(.system(size: 9, weight: .medium, design: .monospaced)).tracking(2).foregroundStyle(Palette.sage)
                     HStack(alignment: .firstTextBaseline) {
                         Text("LV. \(String(format: "%02d", garden.growth.level))").font(.system(size: 12, design: .monospaced)).foregroundStyle(Palette.sage)
                         Button { name = garden.snapshot.name; renaming = true } label: {
@@ -92,7 +71,7 @@ struct GardenScreen: View {
                     Button {
                         happy.toggle(); line = happy ? "보송보송, 네 순간이 나를 키워!" : "다음 사진도 기다릴게."
                         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-                    } label: { JarView(experience: garden.snapshot.experience, happy: happy) }.buttonStyle(.plain).accessibilityLabel("마리모 쓰다듬기")
+                    } label: { MarimoView(size: min(240, 185 + CGFloat(sqrt(Double(max(0, garden.snapshot.experience)))) * 0.6), happy: happy).frame(height: 260) }.buttonStyle(.plain).accessibilityLabel("마리모 쓰다듬기")
                     VStack(spacing: 10) {
                         HStack { Text("조금씩, 무럭무럭"); Spacer(); Text("\(garden.growth.progress) / 100 EXP").monospacedDigit() }.font(.caption2)
                         ProgressView(value: Double(garden.growth.progress), total: 100).tint(Palette.sage)
