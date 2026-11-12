@@ -22,6 +22,8 @@ final class CameraService: NSObject, ObservableObject {
     let preview = PreviewRenderer()
     private let lookLock = NSLock()
     private var selectedLook: FilmLook = .eternal
+    /// True when the active camera already delivers portrait frames (e.g. square-sensor front cameras).
+    private var feedUpright = false
     private var captureCompletion: ((Result<Data, Error>) -> Void)?
     private var input: AVCaptureDeviceInput?
     private var position: AVCaptureDevice.Position = .back
@@ -142,7 +144,10 @@ final class CameraService: NSObject, ObservableObject {
             }
         }
         if let connection = photoOutput.connection(with: .video) {
-            if connection.isVideoRotationAngleSupported(90) { connection.videoRotationAngle = 90 }
+            // Sensors that are already portrait must not be turned a second time.
+            lookLock.lock(); let upright = feedUpright; lookLock.unlock()
+            let angle: CGFloat = upright ? 0 : 90
+            if connection.isVideoRotationAngleSupported(angle) { connection.videoRotationAngle = angle }
             if connection.isVideoMirroringSupported {
                 connection.automaticallyAdjustsVideoMirroring = false
                 connection.isVideoMirrored = position == .front
@@ -204,6 +209,7 @@ final class CameraService: NSObject, ObservableObject {
                 DispatchQueue.main.async { completion(.failure(SCOOError.message("카메라가 준비될 때까지 기다려 주세요."))) }; return
             }
             self.captureCompletion = completion
+            self.orientConnections()   // picks up the live feed's measured orientation
             DispatchQueue.main.async { self.isCapturing = true }
             let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
             if self.input?.device.hasFlash == true { settings.flashMode = flash ? .on : .off }
@@ -240,11 +246,14 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         guard let buffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         var image = CIImage(cvPixelBuffer: buffer)
         // Only orient here when the connection really delivers native landscape frames.
+        // Decide from the frame itself: landscape frames need turning, portrait ones are already upright.
+        let upright = CVPixelBufferGetHeight(buffer) >= CVPixelBufferGetWidth(buffer)
         if connection.videoRotationAngle == 0 && !connection.isVideoMirrored {
             let front = connection.inputPorts.first?.sourceDevicePosition == .front
-            image = image.oriented(front ? .leftMirrored : .right)
+            if upright { if front { image = image.oriented(.upMirrored) } }
+            else { image = image.oriented(front ? .leftMirrored : .right) }
         }
-        lookLock.lock(); let look = selectedLook; lookLock.unlock()
+        lookLock.lock(); let look = selectedLook; feedUpright = upright; lookLock.unlock()
         // Building the CIImage is only a recipe; the GPU does the work when the preview draws.
         preview.show(look.apply(to: image, finishing: false))
     }
