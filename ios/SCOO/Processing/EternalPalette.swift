@@ -36,13 +36,14 @@ enum EternalPalette {
         var b = curve(luma + (input.b - luma) * saturation)
         let shadow = (1 - smoothstep(0.12, 0.55, luma)) * smoothstep(0, 0.06, luma)
         let light = smoothstep(0.42, 0.93, luma)
-        r += -0.004 * shadow + 0.013 * light
-        g += 0.002 * shadow + 0.005 * light
-        b += 0.009 * shadow - 0.007 * light
+        // Keep highlights close to neutral: a stronger warm push reads as a yellow cast on white.
+        r += -0.004 * shadow + 0.004 * light
+        g += 0.002 * shadow + 0.002 * light
+        b += 0.009 * shadow - 0.001 * light
         let green = smoothstep(0.015, 0.12, input.g - max(input.r, input.b))
-        r += green * 0.008
-        g -= green * 0.007
-        b -= green * 0.006
+        r += green * 0.004
+        g -= green * 0.004
+        b -= green * 0.002
         return RGB(r: min(1, max(0, r)), g: min(1, max(0, g)), b: min(1, max(0, b)))
     }
 
