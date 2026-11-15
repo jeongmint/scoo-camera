@@ -6,7 +6,8 @@ import Photos
 actor PhotoPipeline {
     private let context = CIContext(options: [.cacheIntermediates: false])
 
-    func process(data: Data, look: FilmLook, mode: CaptureMode, dateStamp: Bool, aspectRatio: CGFloat? = nil) throws -> ProcessedPhoto {
+    func process(data: Data, look: FilmLook, mode: CaptureMode, dateStamp: Bool, aspectRatio: CGFloat? = nil,
+                 companion: Companion? = nil) throws -> ProcessedPhoto {
         guard let uiImage = UIImage(data: data) else { throw SCOOError.message("사진을 열 수 없어요.") }
         // UIKit normalizes all EXIF orientations before cropping or Vision analysis.
         let size = uiImage.size
@@ -29,9 +30,15 @@ actor PhotoPipeline {
         guard let analysisImage = context.createCGImage(cropped, from: cropped.extent) else {
             throw SCOOError.message("사진을 분석할 수 없어요.")
         }
+        // Classification and quality use the plain scene; the friend is added afterwards so it never
+        // changes the food guess or the light bonus, but it still receives the same film look.
         let classification = classify(analysisImage, mode: mode)
         let bonus = quality(analysisImage)
-        let result = look.apply(to: cropped, finishing: true)
+        var filmInput = cropped
+        if let companion, let together = place(companion, on: analysisImage) {
+            filmInput = CIImage(cgImage: together)
+        }
+        let result = look.apply(to: filmInput, finishing: true)
         guard let rendered = context.createCGImage(result, from: result.extent) else {
             throw SCOOError.message("필터를 적용하지 못했어요.")
         }
@@ -50,6 +57,21 @@ actor PhotoPipeline {
         }
         guard let jpeg = image.jpegData(compressionQuality: 0.92) else { throw SCOOError.message("JPEG를 만들지 못했어요.") }
         return ProcessedPhoto(jpeg: jpeg, isFood: classification.0, bonus: bonus, classificationNote: classification.1)
+    }
+
+    /// Draws the friend into the frame at the same spot the viewfinder showed it. Returns nil if the image is missing.
+    private func place(_ companion: Companion, on base: CGImage) -> CGImage? {
+        guard let sticker = UIImage(named: companion.assetName) else { return nil }
+        let size = CGSize(width: base.width, height: base.height)
+        let format = UIGraphicsImageRendererFormat(); format.scale = 1; format.opaque = true
+        let frame = Companion.frame(in: size)
+        return UIGraphicsImageRenderer(size: size, format: format).image { context in
+            UIImage(cgImage: base).draw(in: CGRect(origin: .zero, size: size))
+            // Same soft drop shadow as on screen, scaled to the photo.
+            context.cgContext.setShadow(offset: CGSize(width: 0, height: frame.width * 0.05), blur: frame.width * 0.07,
+                                        color: UIColor.black.withAlphaComponent(0.28).cgColor)
+            sticker.draw(in: frame)
+        }.cgImage
     }
 
     private func classify(_ image: CGImage, mode: CaptureMode) -> (Bool, String) {

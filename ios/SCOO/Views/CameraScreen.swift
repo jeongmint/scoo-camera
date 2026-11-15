@@ -13,6 +13,7 @@ struct CameraScreen: View {
     @AppStorage("moriX") private var savedMoriX = MoriPlacement.initial.x
     @AppStorage("moriY") private var savedMoriY = MoriPlacement.initial.y
     @AppStorage("moriMoveHintSeen") private var moveHintSeen = false
+    @AppStorage("companion") private var companionRaw = ""
     @State private var mode: CaptureMode = .auto
     @State private var flash = false
     @State private var processing = false
@@ -37,6 +38,8 @@ struct CameraScreen: View {
     private let look = FilmLook.eternal
     private var blocked: Bool { processing || camera.isCapturing || !garden.ready }
     private var canCapture: Bool { !blocked && camera.isRunning && scenePhase == .active && sheet == nil }
+    /// The friend to shoot together with; nil means shooting alone.
+    private var companion: Companion? { Companion(rawValue: companionRaw) }
     private var moriSize: CGFloat { min(105, 78 + CGFloat(sqrt(Double(max(0, garden.snapshot.experience)))) * 0.3) }
 
     var body: some View {
@@ -51,6 +54,7 @@ struct CameraScreen: View {
                     RoundedRectangle(cornerRadius: 3).stroke(.yellow.opacity(0.9), lineWidth: 1)
                         .frame(width: 54, height: 54).position(focusPoint).allowsHitTesting(false)
                 }
+                companionView(size: size)
                 chrome(insets: insets)
                 floatingMori(size: size, insets: insets)
                 if shutterFlash { Color.white.opacity(0.8).allowsHitTesting(false) }
@@ -102,14 +106,14 @@ struct CameraScreen: View {
             guard let item else { return }
             guard !processing else { selectedItem = nil; return }
             processing = true
-            let capturedMode = mode, stamp = dateStamp
+            let capturedMode = mode, stamp = dateStamp, together = companion
             Task {
                 do {
                     guard let data = try await item.loadTransferable(type: Data.self) else {
                         throw SCOOError.message("사진을 불러오지 못했어요.")
                     }
                     // Imported photos keep their original aspect ratio.
-                    await process(data, mode: capturedMode, stamp: stamp, aspect: nil)
+                    await process(data, mode: capturedMode, stamp: stamp, aspect: nil, companion: together)
                 } catch { processing = false; notify(error.localizedDescription) }
                 selectedItem = nil
             }
@@ -197,11 +201,21 @@ struct CameraScreen: View {
                 Spacer()
                 Menu {
                     ForEach(CaptureMode.allCases) { value in Button(value.title) { mode = value } }
+                    Section("같이 찍기") {
+                        Picker("같이 찍기", selection: $companionRaw) {
+                            Text("혼자 찍기").tag("")
+                            ForEach(Companion.allCases) { friend in Text(friend.title).tag(friend.rawValue) }
+                        }
+                    }
                 } label: {
-                    HStack(spacing: 5) { Text(mode.title); Image(systemName: "chevron.down").font(.system(size: 8)) }
+                    HStack(spacing: 5) {
+                        Text(companion.map { "\(mode.title) · \($0.title)" } ?? mode.title)
+                        Image(systemName: "chevron.down").font(.system(size: 8))
+                    }
                         .font(.system(size: 11, weight: .medium)).padding(.horizontal, 15).frame(height: 38)
                         .background(.black.opacity(0.25), in: Capsule())
-                }.disabled(blocked).accessibilityLabel("촬영 모드, \(mode.title)")
+                }.disabled(blocked)
+                    .accessibilityLabel("촬영 모드, \(mode.title), \(companion.map { "\($0.title)와 같이 찍기" } ?? "혼자 찍기")")
                 Spacer()
                 Button { camera.flip() } label: {
                     Image(systemName: "arrow.triangle.2.circlepath.camera").font(.system(size: 21)).frame(width: 48, height: 48)
@@ -219,6 +233,20 @@ struct CameraScreen: View {
                                        top: Double(insets.top + 80), bottom: Double(insets.bottom + 90),
                                        radius: Double(moriSize / 2))
         return CGPoint(x: CGFloat(bounds.x) * size.width, y: CGFloat(bounds.y) * size.height)
+    }
+
+    /// The friend standing in the viewfinder. It is composited into the photo at the same spot (see `Companion.frame`).
+    @ViewBuilder
+    private func companionView(size: CGSize) -> some View {
+        if let companion {
+            let frame = Companion.frame(in: size)
+            Image(companion.assetName).resizable().scaledToFit()
+                .frame(width: frame.width, height: frame.height)
+                .shadow(color: .black.opacity(0.28), radius: frame.width * 0.07, y: frame.width * 0.05)
+                .position(x: frame.midX, y: frame.midY)
+                .allowsHitTesting(false)
+                .accessibilityLabel("\(companion.title)와 같이 찍는 중")
+        }
     }
 
     private func floatingMori(size: CGSize, insets: EdgeInsets) -> some View {
@@ -291,11 +319,11 @@ struct CameraScreen: View {
             return
         }
         processing = true
-        let capturedMode = mode, stamp = dateStamp
+        let capturedMode = mode, stamp = dateStamp, together = companion
         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
         camera.capture(flash: flash) { result in
             switch result {
-            case .success(let data): Task { await process(data, mode: capturedMode, stamp: stamp, aspect: aspect) }
+            case .success(let data): Task { await process(data, mode: capturedMode, stamp: stamp, aspect: aspect, companion: together) }
             case .failure(let error): processing = false; notify(error.localizedDescription)
             }
         }
@@ -317,18 +345,18 @@ struct CameraScreen: View {
         }
     }
 
-    private func process(_ data: Data, mode: CaptureMode, stamp: Bool, aspect: CGFloat?) async {
+    private func process(_ data: Data, mode: CaptureMode, stamp: Bool, aspect: CGFloat?, companion: Companion?) async {
         defer { processing = false }
         do {
             let oldLevel = garden.growth.level
-            let result = try await pipeline.process(data: data, look: look, mode: mode, dateStamp: stamp, aspectRatio: aspect)
+            let result = try await pipeline.process(data: data, look: look, mode: mode, dateStamp: stamp, aspectRatio: aspect, companion: companion)
             let gain = try await garden.add(result, filter: look, mode: mode)
             withAnimation(.easeOut(duration: 0.12)) { shutterFlash = true }
             Task { try? await Task.sleep(for: .milliseconds(160)); withAnimation { shutterFlash = false } }
             UINotificationFeedbackGenerator().notificationOccurred(.success)
             notify(garden.growth.level > oldLevel
                    ? "\(garden.snapshot.name), LV.\(garden.growth.level)! 또 자랐어 🌱"
-                   : "\(result.isFood ? "냠냠, 든든한 한 끼" : "이 순간 마음에 들어") · +\(gain) EXP")
+                   : "\(companion.map { "\($0.title)랑 같이 찰칵! " } ?? "")\(result.isFood ? "냠냠, 든든한 한 끼" : "이 순간 마음에 들어") · +\(gain) EXP")
             if autoSave {
                 do { try await PhotoLibraryWriter.save(result.jpeg) }
                 catch { notify("앱에는 저장했어요. \(error.localizedDescription)") }
