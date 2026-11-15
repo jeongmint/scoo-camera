@@ -41,5 +41,5 @@ python3 tools/breeding/breed.py prompts
 ## 데이지 위치 조절
 
 - 기본값은 `breed.py` 위쪽의 `DAISY_WIDTH`(캐릭터 폭 대비 크기, 0.26), `DAISY_X`(왼쪽에서 몇 % 지점, 0.27), `DAISY_TILT`(기울기)예요. 꽃은 그 가로 위치의 몸 윤곽 맨 위에 꽂혀요.
-- 캐릭터마다 `characters.json`에 `"daisy": {"x": 0.40, "below_ears": true}`를 넣으면 따로 정할 수 있어요. `below_ears`는 귀·꼭지가 머리와 만나는 높이까지 내려서 꽂아요. 지금은 토리(토끼)만 귀 안쪽 아래(x 0.40)로 정해 뒀어요.
+- 캐릭터마다 `characters.json`에 `"daisy": {"x": 0.33, "below_ears": true}`를 넣으면 따로 정할 수 있어요. `below_ears`는 귀·꼭지가 머리와 만나는 높이까지 내려서 꽂아요. 지금은 토리(토끼)만 귀 안쪽 아래(x 0.33)로 정해 뒀어요.
 - 교배 결과(`tori-sia`처럼 `A-B` 이름)는 **부모 A**의 설정을 따라요. 이름이 다르면 `adult --parent tori`로 지정해요.

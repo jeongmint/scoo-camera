@@ -82,7 +82,7 @@
       "name": "토리",
       "image": "tools/breeding/characters/tori.png",
       "daisy": {
-        "x": 0.4,
+        "x": 0.33,
         "below_ears": true
       }
     },
