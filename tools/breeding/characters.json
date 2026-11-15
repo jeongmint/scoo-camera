@@ -15,7 +15,12 @@
     },
     "nyamo": {
       "name": "냐모",
-      "image": "ios/SCOO/Resources/Assets.xcassets/Companion-nyamo.imageset/nyamo.png"
+      "image": "ios/SCOO/Resources/Assets.xcassets/Companion-nyamo.imageset/nyamo.png",
+      "daisy": {
+        "x": 0.28,
+        "below_ears": true,
+        "drop": 0.4
+      }
     },
     "happy": {
       "name": "해피",
@@ -28,7 +33,12 @@
     },
     "chiko": {
       "name": "치코",
-      "image": "tools/breeding/characters/chiko.png"
+      "image": "tools/breeding/characters/chiko.png",
+      "daisy": {
+        "x": 0.28,
+        "below_ears": true,
+        "drop": 0.4
+      }
     },
     "dochi": {
       "name": "도치",

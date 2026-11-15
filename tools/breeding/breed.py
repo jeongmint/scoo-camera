@@ -155,8 +155,8 @@ def cmd_generate(args):
                 )
             raw.write_bytes(base64.b64decode(result.data[0].b64_json))
             baby = cutout(raw, OUT / f"{stem}-baby.png")
-            x_ratio, below_ears = daisy_settings(a)
-            add_daisy(baby, OUT / f"{stem}-adult.png", x_ratio=x_ratio, below_ears=below_ears)
+            x_ratio, below_ears, drop = daisy_settings(a)
+            add_daisy(baby, OUT / f"{stem}-adult.png", x_ratio=x_ratio, below_ears=below_ears, drop=drop)
             print(f"  → {stem}-baby.png, {stem}-adult.png")
 
 
@@ -260,12 +260,13 @@ def daisy_settings(name):
     characters = load()
     key = name if name in characters else name.split("-")[0]
     custom = characters.get(key, {}).get("daisy", {})
-    return custom.get("x", DAISY_X), custom.get("below_ears", False)
+    return custom.get("x", DAISY_X), custom.get("below_ears", False), custom.get("drop", 0.0)
 
 
-def add_daisy(source, target, size=800, x_ratio=DAISY_X, below_ears=False):
+def add_daisy(source, target, size=800, x_ratio=DAISY_X, below_ears=False, drop=0.0):
     """교배를 마친 성체: 몸 윤곽 위에 데이지 꽃을 꽂는다.
-    below_ears=True면 귀·꼭지 같은 튀어나온 부분 아래, 머리 윤곽에 꽂는다."""
+    below_ears=True면 귀·꼭지 같은 튀어나온 부분 아래, 머리 윤곽에 꽂는다.
+    drop은 거기서 꽃 높이의 몇 배만큼 더 내릴지 (예: 0.3)."""
     import numpy as np
     from PIL import Image
     body = Image.open(source).convert("RGBA")
@@ -287,7 +288,7 @@ def add_daisy(source, target, size=800, x_ratio=DAISY_X, below_ears=False):
     pad = flower.width
     canvas = Image.new("RGBA", (body.width + pad * 2, body.height + pad * 2), (0, 0, 0, 0))
     canvas.paste(body, (pad, pad))
-    cx, cy = pad + x, pad + edge + int(flower.height * 0.12)
+    cx, cy = pad + x, pad + edge + int(flower.height * (0.12 + drop))
     canvas.alpha_composite(flower, (cx - flower.width // 2, cy - flower.height // 2))
     framed = canvas.crop(canvas.getbbox())
     side = int(max(framed.size) * 1.08)
@@ -331,8 +332,8 @@ def cmd_adult(args):
     else:
         OUT.mkdir(exist_ok=True)
         target = OUT / f"{name}-adult.png"
-    x_ratio, below_ears = daisy_settings(args.parent or name)
-    add_daisy(source, target, x_ratio=x_ratio, below_ears=below_ears)
+    x_ratio, below_ears, drop = daisy_settings(args.parent or name)
+    add_daisy(source, target, x_ratio=x_ratio, below_ears=below_ears, drop=drop)
     print(f"→ {_show(target)}")
 
 
