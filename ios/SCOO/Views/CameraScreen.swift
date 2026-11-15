@@ -14,6 +14,8 @@ struct CameraScreen: View {
     @AppStorage("moriY") private var savedMoriY = MoriPlacement.initial.y
     @AppStorage("moriMoveHintSeen") private var moveHintSeen = false
     @AppStorage("assignedCompanion") private var assignedRaw = ""
+    @AppStorage("district") private var districtRaw = ""
+    @StateObject private var locator = DistrictLocator()
     @AppStorage("companion") private var companionRaw = ""
     @State private var mode: CaptureMode = .auto
     @State private var flash = false
@@ -100,12 +102,8 @@ struct CameraScreen: View {
         .persistentSystemOverlays(.hidden)
         .tint(.white)
         .task {
-            if Companion(rawValue: assignedRaw) == nil {
-                let friend = Companion.assign()
-                assignedRaw = friend.rawValue
-                notify("새 친구 도착! \(friend.title) · 촬영 모드 메뉴의 ‘같이 찍기’에서 만나요")
-            }
             camera.setLook(look); camera.start()
+            await meetFriend()
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active && sheet == nil && !importing { camera.start() }
@@ -346,6 +344,25 @@ struct CameraScreen: View {
             case .success(let data): Task { await process(data, mode: capturedMode, stamp: stamp, aspect: aspect, companion: together) }
             case .failure(let error): processing = false; calmDown(); notify(error.localizedDescription)
             }
+        }
+    }
+
+    /// First launch: the friend a user gets depends on the Seoul district they are in.
+    /// Without a usable position (permission, signal, outside Seoul) the draw is plain random.
+    private func meetFriend() async {
+        guard Companion(rawValue: assignedRaw) == nil else { return }
+        var generator = SystemRandomNumberGenerator()
+        switch await locator.currentDistrict() {
+        case .success(let district):
+            let friend = Companion.assign(in: district, using: &generator)
+            districtRaw = district.rawValue
+            assignedRaw = friend.rawValue
+            notify("\(district.rawValue)에서 새 친구 도착! \(friend.title)")
+        case .failure(let failure):
+            let friend = Companion.assign(using: &generator)
+            districtRaw = ""
+            assignedRaw = friend.rawValue
+            notify("새 친구 도착! \(friend.title) · \(failure.reason) 이번엔 랜덤으로 왔어요.")
         }
     }
 
