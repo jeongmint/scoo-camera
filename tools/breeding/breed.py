@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
-"""교배 이미지 시험 도구.
+"""스쿠카메라 교배 이미지 도구.
 
-    python3 tools/breeding/breed.py prompts               # 12개 조합 프롬프트를 prompts.md로 저장 (API 키 불필요)
-    python3 tools/breeding/breed.py generate --model <모델 ID> [--pair nyamo:mori]
-                                                          # 이미지 API로 생성 (OPENAI_API_KEY 필요)
-    python3 tools/breeding/breed.py cutout <이미지> [--name nyamo-mori] [--to-assets]
-                                                          # 배경 제거 + 정사각형 800px 정리
+    python3 tools/breeding/breed.py prompts                     # prompts.md 다시 만들기 (프롬프트 + 부모 목록)
+    python3 tools/breeding/breed.py generate --model <모델 ID> [--pair chiko:sia] [--count 3]
+                                                                # 이미지 API로 아기 생성 + 성체(데이지) 버전 (OPENAI_API_KEY 필요)
+    python3 tools/breeding/breed.py adult <아기 PNG> [--name chiko-sia] [--to-assets]
+                                                                # 교배를 마친 성체: 데이지 꽃 붙이기
+    python3 tools/breeding/breed.py cutout <이미지> [--name chiko-sia] [--to-assets]
+                                                                # 떠다니는 점 제거 + 정사각형 800px 정리
+    python3 tools/breeding/breed.py add <PNG> --key <영문 키> --name <이름> [--event]
+                                                                # 새 캐릭터를 부모 목록에 추가
 
 필요한 패키지: pillow, numpy (generate는 openai 패키지도 필요)
 """
@@ -21,25 +25,57 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 OUT = HERE / "out"
+CHARACTERS = HERE / "characters"
+DAISY = HERE / "daisy.png"
 ASSETS = ROOT / "ios/SCOO/Resources/Assets.xcassets"
 
-STYLE = (
-    "Keep the exact look of the reference images: a soft needle-felted plush toy, matte felt fibers, "
-    "gentle studio light from the upper left, front view, centered, the whole character visible and "
-    "filling about 80% of a square canvas. Keep the face of image 1 exactly: small dark-brown dot eyes "
-    "and a thin small smile, nothing else added to the face. One single character only, no text, "
-    "no props, no ground shadow."
-)
-BACKGROUND = {
-    "transparent": "Transparent background.",
-    # Only for tools without transparency: a flat color the cutout step can remove.
-    "gray": "Plain flat mid-gray (#808080) background with no gradient, no floor and no shadow.",
-}
+# 교배 프롬프트 원문. 첨부 순서: 1번 이미지 = 부모 A, 2번 이미지 = 부모 B.
+PROMPT = """첨부한 두 캐릭터를 부모로 삼아, 스쿠카메라 세계관의 새로운 아기 캐릭터 한 마리를 만들어줘.
+
+[유전 규칙]
+
+* 첫 번째 이미지의 캐릭터를 부모 A, 두 번째 이미지의 캐릭터를 부모 B로 지정한다.
+* 부모 A의 둥근 몸 형태와 전체 실루엣을 기본으로 유지한다.
+* 부모 B의 대표 색상을 아기 캐릭터의 주된 몸 색상으로 적용한다. 원래 색을 얼룩처럼 남기지 말고 자연스럽고 일관된 색상으로 표현한다.
+* 부모 B를 알아볼 수 있는 특징을 정확히 하나 골라 물려준다. 귀, 잎, 줄무늬, 고리, 꼬리, 껍질 무늬, 소재 중 부모 A의 형태와 가장 잘 어울리는 특징을 선택한다.
+* 특징을 붙여 놓은 합성물처럼 만들지 말고, 처음부터 하나의 캐릭터로 태어난 것처럼 자연스럽게 통합한다.
+* 얼굴은 부모 A의 원래 표정을 유지한다. 작은 갈색 점눈 두 개와 원래의 작고 순한 웃는 입을 그대로 따른다. 코나 부리가 있는 캐릭터는 그 얼굴 구조도 유지한다.
+* 눈썹, 날카로운 눈매, 능글맞은 표정, 이빨, 과장된 볼살을 추가하지 않는다.
+
+[그림체]
+첨부 이미지와 동일한 포근한 캐릭터 그림체.
+통통하고 동그란 몸, 짧고 작은 부속, 부드러운 파스텔 색상.
+미세한 솜털과 펠트 같은 촉감, 은은한 입체감, 부드러운 확산광.
+몸의 소재는 부모 A를 기준으로 유지하되, 물려받은 특징의 소재가 자연스럽게 어우러지게 한다.
+실제 동물의 해부학보다 둥근 마스코트 비율을 우선한다.
+작은 크기로 보아도 얼굴과 물려받은 특징이 명확하게 읽혀야 한다.
+
+[구도와 출력]
+
+* 아기 캐릭터 단 한 마리만 정면을 바라보게 한다.
+* 전체 몸과 귀, 꼬리, 장식이 모두 보이게 한다.
+* 정방형 캔버스 중앙에 배치하고 사방에 충분한 투명 여백을 둔다.
+* 실제 알파 채널이 있는 투명 배경 PNG로 출력한다.
+* 배경색, 체크무늬 배경, 바닥, 바닥 그림자, 글자, 이름, 테두리, 워터마크를 넣지 않는다.
+* 부모 캐릭터, 비교 이미지, 여러 시안, 분할 화면을 함께 그리지 않는다.
+
+최종 결과는 “부모 A의 형태 + 부모 B의 색상과 특징 하나 + 부모 A의 원래 순한 표정”을 가진, 사랑스럽고 완성도 있는 새로운 스쿠카메라 캐릭터여야 한다."""
+
+# 성체 데이지: 캐릭터 폭 대비 크기, 몸 윤곽 위 어느 가로 위치에 꽂을지, 기울기(도)
+DAISY_WIDTH = 0.34
+DAISY_X = 0.27
+DAISY_TILT = 12
 
 
 def load():
-    data = json.loads((HERE / "characters.json").read_text())
-    return data["characters"], data.get("overrides", {})
+    return json.loads((HERE / "characters.json").read_text())["characters"]
+
+
+def save(characters):
+    path = HERE / "characters.json"
+    data = json.loads(path.read_text())
+    data["characters"] = characters
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
 
 
 def pairs(characters, include_events=False):
@@ -47,51 +83,41 @@ def pairs(characters, include_events=False):
     return list(itertools.permutations(keys, 2))
 
 
-def summary_ko(a, b, characters, overrides):
-    key = f"{a} x {b}"
-    if key in overrides:
-        return overrides[key]
-    A, B = characters[a], characters[b]
-    return f"{A['name']} 몸 + {B['color_ko']} 포인트 + {B['feature_ko']}"
-
-
-def prompt(a, b, characters, background):
-    A, B = characters[a], characters[b]
-    return (
-        f"Image 1 is {A['name']} and image 2 is {B['name']}, two characters from the same family. "
-        f"Create their child. Body: keep the body, silhouette and face of image 1 ({A['body']}). "
-        f"Color: tint only the tips and edges (ears, tail, top, rim) with the point color of image 2 ({B['color']}), "
-        f"the rest keeps the colors of image 1. Feature: add exactly one signature feature from image 2: {B['feature']}, "
-        f"small and naturally attached. {STYLE} {BACKGROUND[background]}"
-    )
-
-
 def cmd_prompts(args):
-    characters, overrides = load()
+    characters = load()
+    regular = [k for k, c in characters.items() if not c.get("event")]
     lines = [
-        "# 교배 프롬프트 (시험용)",
+        "# 교배 프롬프트",
         "",
-        "규칙: 첫 번째 부모가 몸·얼굴, 두 번째 부모가 포인트 색과 대표 특징 하나 (노트 #2 외형 유전 검토안).",
+        f"부모 후보 {len(characters)}종(이벤트 제외 {len(regular)}종) · 부모 순서까지 따지면 {len(pairs(characters))}가지 조합.",
         "",
-        "ChatGPT에서 쓰는 법: 부모 PNG를 **첫 번째 → 두 번째 순서로** 첨부하고 아래 프롬프트를 붙여 넣으세요.",
-        "결과를 받으면 `python3 tools/breeding/breed.py cutout <파일> --name <a>-<b>`로 배경을 지워요.",
+        "## 쓰는 법",
         "",
+        "1. 아래 표에서 부모 A, 부모 B의 PNG를 **A → B 순서로** 첨부해요.",
+        "2. 아래 프롬프트를 그대로 붙여 넣어요.",
+        "3. 받은 아기 PNG를 정리하고 성체 버전(데이지)도 만들어요.",
+        "",
+        "```bash",
+        "python3 tools/breeding/breed.py cutout ~/Downloads/baby.png --name chiko-sia",
+        "python3 tools/breeding/breed.py adult tools/breeding/out/chiko-sia-clean.png --name chiko-sia",
+        "```",
+        "",
+        "## 프롬프트",
+        "",
+        "```",
+        PROMPT,
+        "```",
+        "",
+        "## 부모 후보",
+        "",
+        "| 키 | 이름 | 이미지 | 비고 |",
+        "| --- | --- | --- | --- |",
     ]
-    for a, b in pairs(characters, args.events):
-        A, B = characters[a], characters[b]
-        lines += [
-            f"## {A['name']} × {B['name']} — {summary_ko(a, b, characters, overrides)}",
-            "",
-            f"첨부: 1) `{A['image']}`  2) `{B['image']}`",
-            "",
-            "```",
-            prompt(a, b, characters, args.background),
-            "```",
-            "",
-        ]
+    for key, c in characters.items():
+        lines.append(f"| `{key}` | {c['name']} | `{c['image']}` | {'이벤트' if c.get('event') else ''} |")
     path = HERE / "prompts.md"
-    path.write_text("\n".join(lines))
-    print(f"{len(pairs(characters, args.events))}개 조합 → {path.relative_to(ROOT)}")
+    path.write_text("\n".join(lines) + "\n")
+    print(f"{len(characters)}종 → {path.relative_to(ROOT)}")
 
 
 def cmd_generate(args):
@@ -101,29 +127,34 @@ def cmd_generate(args):
         sys.exit("pip install openai 후 다시 실행하세요.")
     if not os.environ.get("OPENAI_API_KEY"):
         sys.exit("OPENAI_API_KEY 환경 변수가 필요해요.")
-    characters, _ = load()
+    characters = load()
     todo = [tuple(p.split(":")) for p in args.pair] if args.pair else pairs(characters, args.events)
+    for a, b in todo:
+        if a not in characters or b not in characters:
+            sys.exit(f"모르는 캐릭터: {a}:{b} (characters.json의 키를 쓰세요)")
     client = OpenAI()
     OUT.mkdir(exist_ok=True)
     for a, b in todo:
         for n in range(args.count):
-            target = OUT / f"{a}-{b}-{n + 1}.png"
-            if target.exists() and not args.force:
-                print(f"건너뜀 {target.name} (이미 있음)")
+            stem = f"{a}-{b}" + (f"-{n + 1}" if args.count > 1 else "")
+            raw = OUT / f"{stem}-raw.png"
+            if raw.exists() and not args.force:
+                print(f"건너뜀 {raw.name} (이미 있음)")
                 continue
-            print(f"생성 중 {characters[a]['name']} × {characters[b]['name']} #{n + 1} …", flush=True)
+            print(f"생성 중 {characters[a]['name']} × {characters[b]['name']} {stem} …", flush=True)
             with open(ROOT / characters[a]["image"], "rb") as first, open(ROOT / characters[b]["image"], "rb") as second:
                 result = client.images.edit(
                     model=args.model,
                     image=[first, second],
-                    prompt=prompt(a, b, characters, "transparent"),
+                    prompt=PROMPT,
                     background="transparent",
                     output_format="png",
                     size="1024x1024",
                 )
-            target.write_bytes(base64.b64decode(result.data[0].b64_json))
-            cutout(target, target.with_name(target.stem + "-clean.png"))
-            print(f"  → {target.relative_to(ROOT)}")
+            raw.write_bytes(base64.b64decode(result.data[0].b64_json))
+            baby = cutout(raw, OUT / f"{stem}-baby.png")
+            add_daisy(baby, OUT / f"{stem}-adult.png")
+            print(f"  → {stem}-baby.png, {stem}-adult.png")
 
 
 # ---- cutout --------------------------------------------------------------
@@ -209,42 +240,117 @@ def cutout(source, target, size=800):
     return target
 
 
+def add_daisy(source, target, size=800):
+    """교배를 마친 성체: 몸 윤곽 왼쪽 위에 데이지 꽃을 꽂는다."""
+    import numpy as np
+    from PIL import Image
+    body = Image.open(source).convert("RGBA")
+    daisy = Image.open(DAISY).convert("RGBA")
+    alpha = np.array(body)[..., 3]
+    box = body.getbbox()
+    if box is None:
+        raise SystemExit(f"{source}: 캐릭터를 찾지 못했어요.")
+    left, top, right, bottom = box
+    width = right - left
+    x = int(left + width * DAISY_X)
+    column = np.nonzero(alpha[:, x] > 128)[0]
+    edge = int(column[0]) if len(column) else top
+    flower_w = int(width * DAISY_WIDTH)
+    flower = daisy.resize((flower_w, int(daisy.height * flower_w / daisy.width)), Image.LANCZOS)
+    flower = flower.rotate(DAISY_TILT, resample=Image.BICUBIC, expand=True)
+    # room around the character so the flower can stick out over the silhouette
+    pad = flower.width
+    canvas = Image.new("RGBA", (body.width + pad * 2, body.height + pad * 2), (0, 0, 0, 0))
+    canvas.paste(body, (pad, pad))
+    cx, cy = pad + x, pad + edge + int(flower.height * 0.12)
+    canvas.alpha_composite(flower, (cx - flower.width // 2, cy - flower.height // 2))
+    framed = canvas.crop(canvas.getbbox())
+    side = int(max(framed.size) * 1.08)
+    square = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+    square.paste(framed, ((side - framed.width) // 2, (side - framed.height) // 2))
+    square.resize((size, size), Image.LANCZOS).save(target, optimize=True)
+    return target
+
+
+def _to_assets(name, kind):
+    folder = ASSETS / f"{kind}-{name}.imageset"
+    folder.mkdir(parents=True, exist_ok=True)
+    target = folder / f"{name}.png"
+    (folder / "Contents.json").write_text(json.dumps(
+        {"images": [{"filename": target.name, "idiom": "universal"}], "info": {"author": "xcode", "version": 1}},
+        indent=2) + "\n")
+    return target
+
+
+def _show(path):
+    return path.relative_to(ROOT) if path.is_relative_to(ROOT) else path
+
+
 def cmd_cutout(args):
     source = Path(args.image)
     name = args.name or source.stem
     if args.to_assets:
-        folder = ASSETS / f"Breed-{name}.imageset"
-        folder.mkdir(parents=True, exist_ok=True)
-        target = folder / f"{name}.png"
-        (folder / "Contents.json").write_text(json.dumps(
-            {"images": [{"filename": target.name, "idiom": "universal"}], "info": {"author": "xcode", "version": 1}},
-            indent=2) + "\n")
+        target = _to_assets(name, "Breed")
     else:
         OUT.mkdir(exist_ok=True)
         target = OUT / f"{name}-clean.png"
     cutout(source, target)
-    print(f"→ {target.relative_to(ROOT) if target.is_relative_to(ROOT) else target}")
+    print(f"→ {_show(target)}")
+
+
+def cmd_adult(args):
+    source = Path(args.image)
+    name = args.name or source.stem.removesuffix("-clean").removesuffix("-baby")
+    if args.to_assets:
+        target = _to_assets(name, "Adult")
+    else:
+        OUT.mkdir(exist_ok=True)
+        target = OUT / f"{name}-adult.png"
+    add_daisy(source, target)
+    print(f"→ {_show(target)}")
+
+
+def cmd_add(args):
+    characters = load()
+    CHARACTERS.mkdir(exist_ok=True)
+    target = CHARACTERS / f"{args.key}.png"
+    cutout(Path(args.image), target)
+    entry = {"name": args.name, "image": str(target.relative_to(ROOT))}
+    if args.event:
+        entry["event"] = True
+    characters[args.key] = entry
+    save(characters)
+    print(f"{args.name} 추가 → {target.relative_to(ROOT)} (prompts.md는 prompts 명령으로 다시 만드세요)")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
-    p = sub.add_parser("prompts", help="조합별 프롬프트를 prompts.md로 저장")
-    p.add_argument("--background", choices=BACKGROUND, default="transparent", help="기본은 투명 배경, 투명이 안 되는 도구는 gray")
-    p.add_argument("--events", action="store_true", help="이벤트 친구(해피)도 포함")
+    p = sub.add_parser("prompts", help="prompts.md 다시 만들기")
     p.set_defaults(func=cmd_prompts)
-    g = sub.add_parser("generate", help="이미지 API로 생성 (OPENAI_API_KEY 필요)")
+    g = sub.add_parser("generate", help="이미지 API로 아기와 성체 생성 (OPENAI_API_KEY 필요)")
     g.add_argument("--model", required=True, help="이미지 모델 ID (OpenAI 문서에서 정확한 ID 확인)")
-    g.add_argument("--pair", action="append", help="a:b 형식, 여러 번 지정 가능. 없으면 전체 조합")
+    g.add_argument("--pair", action="append", help="a:b 형식(a가 부모 A), 여러 번 지정 가능. 없으면 전체 조합")
     g.add_argument("--count", type=int, default=1, help="조합마다 몇 장 만들지 (그림체 흔들림 비교용)")
     g.add_argument("--events", action="store_true", help="이벤트 친구(해피)도 포함")
     g.add_argument("--force", action="store_true", help="이미 있는 결과도 다시 생성")
     g.set_defaults(func=cmd_generate)
-    c = sub.add_parser("cutout", help="배경 제거 + 정사각형 정리")
+    a = sub.add_parser("adult", help="성체 버전: 데이지 꽃 붙이기")
+    a.add_argument("image")
+    a.add_argument("--name", help="결과 이름, 예: chiko-sia")
+    a.add_argument("--to-assets", action="store_true", help="앱 Assets에 Adult-<name> 이미지 세트로 저장")
+    a.set_defaults(func=cmd_adult)
+    c = sub.add_parser("cutout", help="점 제거 + 정사각형 정리")
     c.add_argument("image")
-    c.add_argument("--name", help="결과 이름, 예: nyamo-mori")
+    c.add_argument("--name", help="결과 이름, 예: chiko-sia")
     c.add_argument("--to-assets", action="store_true", help="앱 Assets에 Breed-<name> 이미지 세트로 저장")
     c.set_defaults(func=cmd_cutout)
+    n = sub.add_parser("add", help="새 캐릭터를 부모 목록에 추가")
+    n.add_argument("image")
+    n.add_argument("--key", required=True, help="영문 키, 예: chiko")
+    n.add_argument("--name", required=True, help="이름, 예: 치코")
+    n.add_argument("--event", action="store_true", help="이벤트 캐릭터 (기본 조합에서 제외)")
+    n.set_defaults(func=cmd_add)
     args = parser.parse_args()
     args.func(args)
 
