@@ -17,9 +17,9 @@
       "name": "냐모",
       "image": "ios/SCOO/Resources/Assets.xcassets/Companion-nyamo.imageset/nyamo.png",
       "daisy": {
-        "x": 0.28,
+        "x": 0.26,
         "below_ears": true,
-        "drop": 0.4
+        "drop": 0.25
       }
     },
     "happy": {
@@ -35,9 +35,9 @@
       "name": "치코",
       "image": "tools/breeding/characters/chiko.png",
       "daisy": {
-        "x": 0.28,
+        "x": 0.26,
         "below_ears": true,
-        "drop": 0.4
+        "drop": 0.25
       }
     },
     "dochi": {
