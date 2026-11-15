@@ -1,0 +1,55 @@
+{
+  "_note": "교배 시험용 캐릭터 설명. body = 첫 번째 부모가 물려주는 몸, color = 두 번째 부모가 물려주는 포인트 색, feature = 두 번째 부모가 물려주는 대표 특징 하나. 노트 #2의 '외형 유전' 검토안을 따른다.",
+  "characters": {
+    "gwiyo": {
+      "name": "귀요",
+      "image": "ios/SCOO/Resources/Assets.xcassets/Companion-gwiyo.imageset/gwiyo.png",
+      "body": "a round brushed-gold jingle bell body with a raised rim around the middle and a keyhole slit at the bottom",
+      "color": "warm brushed gold",
+      "color_ko": "은은한 금빛",
+      "feature": "a tiny brushed-gold jingle bell charm",
+      "feature_ko": "작은 방울 장식"
+    },
+    "kuru": {
+      "name": "쿠르",
+      "image": "ios/SCOO/Resources/Assets.xcassets/Companion-kuru.imageset/kuru.png",
+      "body": "a fluffy white cotton cloud body made of soft round puffs",
+      "color": "soft cloud white with a faint sky-blue tint",
+      "color_ko": "구름빛 하양",
+      "feature": "a small fluffy cloud puff",
+      "feature_ko": "작은 구름 뭉치"
+    },
+    "mori": {
+      "name": "모리",
+      "image": "ios/SCOO/Resources/Assets.xcassets/Companion-mori.imageset/mori.png",
+      "body": "a round marimo moss ball body covered in dense green grass-like fibers",
+      "color": "fresh moss green",
+      "color_ko": "이끼 초록",
+      "feature": "a tiny green sprout with two leaves",
+      "feature_ko": "작은 새싹"
+    },
+    "nyamo": {
+      "name": "냐모",
+      "image": "ios/SCOO/Resources/Assets.xcassets/Companion-nyamo.imageset/nyamo.png",
+      "body": "a round cream-and-peach tabby cat body with soft felt fur, short whiskers, two pointed ears and a curled tail",
+      "color": "peach-orange tabby stripes",
+      "color_ko": "복숭아빛 줄무늬",
+      "feature": "two small pointed cat ears",
+      "feature_ko": "고양이 귀"
+    },
+    "happy": {
+      "name": "해피",
+      "event": true,
+      "image": "ios/SCOO/Resources/Assets.xcassets/Companion-happy.imageset/happy.png",
+      "body": "a two-tier white felt snowman body with a small orange nose",
+      "color": "snow white",
+      "color_ko": "눈빛 하양",
+      "feature": "a sage-green knitted scarf",
+      "feature_ko": "연두 목도리"
+    }
+  },
+  "overrides": {
+    "nyamo x mori": "크림색 고양이 + 초록 귀·꼬리 (노트 #2 예시)",
+    "kuru x gwiyo": "은은한 금빛 구름 + 작은 방울 장식 (노트 #2 예시)"
+  }
+}
