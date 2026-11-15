@@ -176,7 +176,7 @@ struct CameraScreen: View {
                 }.disabled(blocked).accessibilityLabel("\(garden.snapshot.name) 성장 기록 열기")
                 Spacer()
                 Menu {
-                    ForEach([1.0, 1.5, 2.0, 3.0], id: \.self) { value in
+                    ForEach([1.0, 1.2, 1.5, 2.0, 3.0], id: \.self) { value in
                         Button(String(format: "%.1f×", value)) { camera.setZoom(value) }
                     }
                 } label: { Text(String(format: "%.1f×", camera.zoom)).font(.system(size: 12, design: .monospaced)).frame(width: 44, height: 32) }

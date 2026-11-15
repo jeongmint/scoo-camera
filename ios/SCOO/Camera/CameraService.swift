@@ -10,7 +10,9 @@ final class CameraService: NSObject, ObservableObject {
     @Published private(set) var isCapturing = false
     @Published private(set) var permissionDenied = false
     @Published private(set) var errorMessage: String?
-    @Published private(set) var zoom: CGFloat = 1
+    /// A slight default crop keeps faces away from the stretched edges of the wide lens.
+    static let defaultZoom: CGFloat = 1.2
+    @Published private(set) var zoom: CGFloat = CameraService.defaultZoom
     @Published private(set) var hasFlash = false
 
     private let session = AVCaptureSession()
@@ -83,7 +85,7 @@ final class CameraService: NSObject, ObservableObject {
         sessionQueue.async {
             guard self.wantsRunning else { return }
             do {
-                if !self.configured { try self.configure(); self.orientConnections() }
+                if !self.configured { try self.configure(); self.orientConnections(); self.applyZoom(Self.defaultZoom) }
                 if !self.session.isRunning { self.session.startRunning() }
                 self.publishRunning()
             } catch { self.fail(error.localizedDescription) }
@@ -167,25 +169,29 @@ final class CameraService: NSObject, ObservableObject {
                 if self.session.canAddInput(replacement) {
                     self.session.addInput(replacement); self.input = replacement; self.position = next
                     self.orientConnections()
-                    DispatchQueue.main.async { self.zoom = 1; self.hasFlash = replacement.device.hasFlash }
+                    DispatchQueue.main.async { self.hasFlash = replacement.device.hasFlash }
                 } else if let previous { self.session.addInput(previous) }
                 self.session.commitConfiguration()
                 // Connections are rebuilt with the new input; apply again once the change is committed.
                 self.orientConnections()
+                self.applyZoom(Self.defaultZoom)
             } catch { self.fail(error.localizedDescription) }
         }
     }
 
     func setZoom(_ requested: CGFloat) {
-        sessionQueue.async {
-            guard let device = self.input?.device else { return }
-            do {
-                try device.lockForConfiguration(); defer { device.unlockForConfiguration() }
-                let value = max(device.minAvailableVideoZoomFactor, min(requested, min(3, device.maxAvailableVideoZoomFactor)))
-                device.videoZoomFactor = value
-                DispatchQueue.main.async { self.zoom = value }
-            } catch { self.fail("줌을 바꾸지 못했어요.") }
-        }
+        sessionQueue.async { self.applyZoom(requested) }
+    }
+
+    /// Call on sessionQueue.
+    private func applyZoom(_ requested: CGFloat) {
+        guard let device = input?.device else { return }
+        do {
+            try device.lockForConfiguration(); defer { device.unlockForConfiguration() }
+            let value = max(device.minAvailableVideoZoomFactor, min(requested, min(3, device.maxAvailableVideoZoomFactor)))
+            device.videoZoomFactor = value
+            DispatchQueue.main.async { self.zoom = value }
+        } catch { fail("줌을 바꾸지 못했어요.") }
     }
 
     func focus(at point: CGPoint) {
@@ -291,11 +297,14 @@ final class PreviewRenderer: NSObject, MTKViewDelegate {
 
     func draw(in view: MTKView) {
         lock.lock(); let image = pending; pending = nil; lock.unlock()
-        let size = view.drawableSize
-        guard let image, size.width > 0, size.height > 0, image.extent.width > 0, image.extent.height > 0,
+        let bounds = view.bounds.size
+        guard let image, bounds.width > 0, bounds.height > 0, image.extent.width > 0, image.extent.height > 0,
               let context, let drawable = view.currentDrawable, let commands = queue?.makeCommandBuffer() else { return }
-        let scale = max(size.width / image.extent.width, size.height / image.extent.height)
-        let scaled = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        // Size everything from the texture actually being drawn into, and fill against the on-screen
+        // shape of the view: if the layer ever stretches its drawable, circles still stay round.
+        let size = CGSize(width: drawable.texture.width, height: drawable.texture.height)
+        let fill = max(bounds.width / image.extent.width, bounds.height / image.extent.height)
+        let scaled = image.transformed(by: CGAffineTransform(scaleX: fill * size.width / bounds.width, y: fill * size.height / bounds.height))
         let filled = scaled.transformed(by: CGAffineTransform(translationX: (size.width - scaled.extent.width) / 2 - scaled.extent.minX,
                                                               y: (size.height - scaled.extent.height) / 2 - scaled.extent.minY))
         let destination = CIRenderDestination(width: Int(size.width), height: Int(size.height), pixelFormat: view.colorPixelFormat,
