@@ -13,6 +13,7 @@ struct CameraScreen: View {
     @AppStorage("moriX") private var savedMoriX = MoriPlacement.initial.x
     @AppStorage("moriY") private var savedMoriY = MoriPlacement.initial.y
     @AppStorage("moriMoveHintSeen") private var moveHintSeen = false
+    @AppStorage("assignedCompanion") private var assignedRaw = ""
     @AppStorage("companion") private var companionRaw = ""
     @State private var mode: CaptureMode = .auto
     @State private var flash = false
@@ -30,6 +31,9 @@ struct CameraScreen: View {
     @GestureState private var pressActive = false
     @State private var holdTask: Task<Void, Never>?
     @State private var pipeline = PhotoPipeline()
+    @State private var expression: MoriExpression = .normal
+    @State private var expressionTask: Task<Void, Never>?
+    @State private var lastReaction: MoriExpression?
 
     private enum CameraSheet: String, Identifiable {
         case album, garden, settings
@@ -38,8 +42,11 @@ struct CameraScreen: View {
     private let look = FilmLook.eternal
     private var blocked: Bool { processing || camera.isCapturing || !garden.ready }
     private var canCapture: Bool { !blocked && camera.isRunning && scenePhase == .active && sheet == nil }
+    /// The friend this user was randomly handed on first launch, and the friends they can shoot with
+    /// (that one plus any open event friend such as the snowman).
+    private var ownedCompanions: [Companion] { Companion(rawValue: assignedRaw).map(Companion.owned(assigned:)) ?? [] }
     /// The friend to shoot together with; nil means shooting alone.
-    private var companion: Companion? { Companion(rawValue: companionRaw) }
+    private var companion: Companion? { Companion(rawValue: companionRaw).flatMap { ownedCompanions.contains($0) ? $0 : nil } }
     private var moriSize: CGFloat { min(105, 78 + CGFloat(sqrt(Double(max(0, garden.snapshot.experience)))) * 0.3) }
 
     var body: some View {
@@ -92,7 +99,14 @@ struct CameraScreen: View {
         .statusBarHidden()
         .persistentSystemOverlays(.hidden)
         .tint(.white)
-        .task { camera.setLook(look); camera.start() }
+        .task {
+            if Companion(rawValue: assignedRaw) == nil {
+                let friend = Companion.assign()
+                assignedRaw = friend.rawValue
+                notify("새 친구 도착! \(friend.title) · 촬영 모드 메뉴의 ‘같이 찍기’에서 만나요")
+            }
+            camera.setLook(look); camera.start()
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active && sheet == nil && !importing { camera.start() }
             else { camera.stop(); focusTask?.cancel() }
@@ -106,6 +120,7 @@ struct CameraScreen: View {
             guard let item else { return }
             guard !processing else { selectedItem = nil; return }
             processing = true
+            closeEyes()
             let capturedMode = mode, stamp = dateStamp, together = companion
             Task {
                 do {
@@ -114,13 +129,13 @@ struct CameraScreen: View {
                     }
                     // Imported photos keep their original aspect ratio.
                     await process(data, mode: capturedMode, stamp: stamp, aspect: nil, companion: together)
-                } catch { processing = false; notify(error.localizedDescription) }
+                } catch { processing = false; calmDown(); notify(error.localizedDescription) }
                 selectedItem = nil
             }
         }
         .onChange(of: camera.errorMessage) { _, error in if let error { notify(error) } }
         .onChange(of: garden.message) { _, error in if let error { notify(error); garden.message = nil } }
-        .onDisappear { camera.stop(); toastTask?.cancel(); focusTask?.cancel() }
+        .onDisappear { camera.stop(); toastTask?.cancel(); focusTask?.cancel(); expressionTask?.cancel() }
         .sheet(item: $sheet, onDismiss: {
             if scenePhase == .active && !importing { camera.start() }
         }) { value in
@@ -204,7 +219,7 @@ struct CameraScreen: View {
                     Section("같이 찍기") {
                         Picker("같이 찍기", selection: $companionRaw) {
                             Text("혼자 찍기").tag("")
-                            ForEach(Companion.allCases) { friend in Text(friend.title).tag(friend.rawValue) }
+                            ForEach(ownedCompanions) { friend in Text(friend.menuTitle).tag(friend.rawValue) }
                         }
                     }
                 } label: {
@@ -243,6 +258,9 @@ struct CameraScreen: View {
             Image(companion.assetName).resizable().scaledToFit()
                 .frame(width: frame.width, height: frame.height)
                 .shadow(color: .black.opacity(0.28), radius: frame.width * 0.07, y: frame.width * 0.05)
+                // a little hop when the photo gets a reaction
+                .offset(y: expression == .normal || expression == .shutter ? 0 : -frame.width * 0.04)
+                .animation(.spring(response: 0.3, dampingFraction: 0.55), value: expression)
                 .position(x: frame.midX, y: frame.midY)
                 .allowsHitTesting(false)
                 .accessibilityLabel("\(companion.title)와 같이 찍는 중")
@@ -284,7 +302,8 @@ struct CameraScreen: View {
                 dragPoint = nil
             }
         return ZStack {
-            MarimoView(size: moriSize, happy: processing || camera.isCapturing, floats: !moving)
+            MarimoView(size: moriSize, happy: processing || camera.isCapturing,
+                       expression: expression == .normal ? nil : expression, floats: !moving)
                 .shadow(color: .black.opacity(0.35), radius: 9, y: 7)
             if processing || camera.isCapturing { ProgressView().tint(.white).scaleEffect(0.75) }
             if moving {
@@ -319,13 +338,37 @@ struct CameraScreen: View {
             return
         }
         processing = true
+        closeEyes()
         let capturedMode = mode, stamp = dateStamp, together = companion
         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
         camera.capture(flash: flash) { result in
             switch result {
             case .success(let data): Task { await process(data, mode: capturedMode, stamp: stamp, aspect: aspect, companion: together) }
-            case .failure(let error): processing = false; notify(error.localizedDescription)
+            case .failure(let error): processing = false; calmDown(); notify(error.localizedDescription)
             }
+        }
+    }
+
+    // MARK: Expressions — 평소 미소 → 찰칵(눈감기) → 사진에 맞는 반응 → 평소 미소
+
+    private func closeEyes() {
+        expressionTask?.cancel()
+        expression = .shutter
+    }
+
+    private func calmDown() {
+        expressionTask?.cancel()
+        expression = .normal
+    }
+
+    private func react(_ face: MoriExpression) {
+        expressionTask?.cancel()
+        lastReaction = face
+        expression = face
+        expressionTask = Task {
+            try? await Task.sleep(for: .seconds(1.8))
+            guard !Task.isCancelled else { return }
+            expression = .normal
         }
     }
 
@@ -351,6 +394,8 @@ struct CameraScreen: View {
             let oldLevel = garden.growth.level
             let result = try await pipeline.process(data: data, look: look, mode: mode, dateStamp: stamp, aspectRatio: aspect, companion: companion)
             let gain = try await garden.add(result, filter: look, mode: mode)
+            react(MoriExpression.reaction(isFood: result.isFood, bonus: result.bonus, leveledUp: garden.growth.level > oldLevel,
+                                          previous: lastReaction, roll: .random(in: 0..<1)))
             withAnimation(.easeOut(duration: 0.12)) { shutterFlash = true }
             Task { try? await Task.sleep(for: .milliseconds(160)); withAnimation { shutterFlash = false } }
             UINotificationFeedbackGenerator().notificationOccurred(.success)
@@ -361,7 +406,7 @@ struct CameraScreen: View {
                 do { try await PhotoLibraryWriter.save(result.jpeg) }
                 catch { notify("앱에는 저장했어요. \(error.localizedDescription)") }
             }
-        } catch { notify("저장하지 못했어요. \(error.localizedDescription)") }
+        } catch { calmDown(); notify("저장하지 못했어요. \(error.localizedDescription)") }
     }
 
     private func notify(_ message: String) {
