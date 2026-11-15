@@ -61,8 +61,10 @@ PROMPT = """첨부한 두 캐릭터를 부모로 삼아, 스쿠카메라 세계�
 
 최종 결과는 “부모 A의 형태 + 부모 B의 색상과 특징 하나 + 부모 A의 원래 순한 표정”을 가진, 사랑스럽고 완성도 있는 새로운 스쿠카메라 캐릭터여야 한다."""
 
-# 성체 데이지: 캐릭터 폭 대비 크기, 몸 윤곽 위 어느 가로 위치에 꽂을지, 기울기(도)
-DAISY_WIDTH = 0.34
+# 성체 데이지: 캐릭터 폭 대비 크기, 몸 윤곽 위 어느 가로 위치에 꽂을지, 기울기(도).
+# 캐릭터마다 characters.json의 "daisy": {"x": 0.4, "below_ears": true}로 바꿀 수 있고,
+# 교배 결과(이름이 a-b)는 부모 A의 설정을 따른다.
+DAISY_WIDTH = 0.26
 DAISY_X = 0.27
 DAISY_TILT = 12
 
@@ -153,7 +155,8 @@ def cmd_generate(args):
                 )
             raw.write_bytes(base64.b64decode(result.data[0].b64_json))
             baby = cutout(raw, OUT / f"{stem}-baby.png")
-            add_daisy(baby, OUT / f"{stem}-adult.png")
+            x_ratio, below_ears = daisy_settings(a)
+            add_daisy(baby, OUT / f"{stem}-adult.png", x_ratio=x_ratio, below_ears=below_ears)
             print(f"  → {stem}-baby.png, {stem}-adult.png")
 
 
@@ -240,8 +243,29 @@ def cutout(source, target, size=800):
     return target
 
 
-def add_daisy(source, target, size=800):
-    """교배를 마친 성체: 몸 윤곽 왼쪽 위에 데이지 꽃을 꽂는다."""
+def head_line(alpha, box, min_share=0.4):
+    """First row from the top where the silhouette is one piece — i.e. where ears, stems and leaves meet the head."""
+    import numpy as np
+    left, top, right, bottom = box
+    width = right - left
+    for y in range(top, bottom):
+        row = np.nonzero(alpha[y, left:right] > 128)[0]
+        if len(row) and row[-1] - row[0] + 1 == len(row) and len(row) >= width * min_share:
+            return y
+    return top
+
+
+def daisy_settings(name):
+    """Placement for a character key, or for a bred 'a-b' name (parent A decides the body shape)."""
+    characters = load()
+    key = name if name in characters else name.split("-")[0]
+    custom = characters.get(key, {}).get("daisy", {})
+    return custom.get("x", DAISY_X), custom.get("below_ears", False)
+
+
+def add_daisy(source, target, size=800, x_ratio=DAISY_X, below_ears=False):
+    """교배를 마친 성체: 몸 윤곽 위에 데이지 꽃을 꽂는다.
+    below_ears=True면 귀·꼭지 같은 튀어나온 부분 아래, 머리 윤곽에 꽂는다."""
     import numpy as np
     from PIL import Image
     body = Image.open(source).convert("RGBA")
@@ -252,9 +276,10 @@ def add_daisy(source, target, size=800):
         raise SystemExit(f"{source}: 캐릭터를 찾지 못했어요.")
     left, top, right, bottom = box
     width = right - left
-    x = int(left + width * DAISY_X)
-    column = np.nonzero(alpha[:, x] > 128)[0]
-    edge = int(column[0]) if len(column) else top
+    x = int(left + width * x_ratio)
+    floor = head_line(alpha, box) if below_ears else top
+    column = np.nonzero(alpha[floor:, x] > 128)[0]
+    edge = floor + int(column[0]) if len(column) else floor
     flower_w = int(width * DAISY_WIDTH)
     flower = daisy.resize((flower_w, int(daisy.height * flower_w / daisy.width)), Image.LANCZOS)
     flower = flower.rotate(DAISY_TILT, resample=Image.BICUBIC, expand=True)
@@ -306,7 +331,8 @@ def cmd_adult(args):
     else:
         OUT.mkdir(exist_ok=True)
         target = OUT / f"{name}-adult.png"
-    add_daisy(source, target)
+    x_ratio, below_ears = daisy_settings(args.parent or name)
+    add_daisy(source, target, x_ratio=x_ratio, below_ears=below_ears)
     print(f"→ {_show(target)}")
 
 
@@ -339,6 +365,7 @@ def main():
     a.add_argument("image")
     a.add_argument("--name", help="결과 이름, 예: chiko-sia")
     a.add_argument("--to-assets", action="store_true", help="앱 Assets에 Adult-<name> 이미지 세트로 저장")
+    a.add_argument("--parent", help="꽃 위치를 따를 부모 A 키 (기본: 이름 a-b의 a)")
     a.set_defaults(func=cmd_adult)
     c = sub.add_parser("cutout", help="점 제거 + 정사각형 정리")
     c.add_argument("image")

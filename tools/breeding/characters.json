@@ -80,7 +80,11 @@
     },
     "tori": {
       "name": "토리",
-      "image": "tools/breeding/characters/tori.png"
+      "image": "tools/breeding/characters/tori.png",
+      "daisy": {
+        "x": 0.4,
+        "below_ears": true
+      }
     },
     "mupu": {
       "name": "무푸",
