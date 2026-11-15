@@ -7,6 +7,7 @@ struct SettingsScreen: View {
     @AppStorage("autoSave") private var autoSave = false
     @AppStorage("assignedCompanion") private var assignedRaw = ""
     @AppStorage("district") private var districtRaw = ""
+    @AppStorage("unlockAllFriends") private var unlockAll = false
     @StateObject private var locator = DistrictLocator()
     @State private var finding = false
     @State private var note: String?
@@ -27,9 +28,10 @@ struct SettingsScreen: View {
                         }
                     }
                     Button("랜덤으로 다시 받기") { receiveRandom() }
+                    Toggle("모든 친구 열기 (교배 테스트)", isOn: $unlockAll)
                     if let note { Text(note).font(.footnote) }
                 } header: { Text("동네 친구 (테스트)") } footer: {
-                    Text("서울 25개 구마다 잘 만나는 친구가 달라요. 구의 친구가 70%, 나머지는 다른 친구예요. 새로 받아도 사진과 성장 기록은 그대로예요.")
+                    Text("서울 25개 구마다 잘 만나는 친구가 달라요. 구의 친구가 70%, 나머지는 다른 친구예요. 새로 받아도 사진과 성장 기록은 그대로예요. ‘모든 친구 열기’를 켜면 교배 화면에서 25종을 모두 고를 수 있어요.")
                 }
                 Section("Eternal") {
                     Text("차가운 회색 그림자와 따뜻한 빛, 짙은 검정과 작은 디지털 입자. 필터는 Eternal 하나만 사용해요.").font(.footnote)

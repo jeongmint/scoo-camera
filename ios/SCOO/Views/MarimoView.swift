@@ -159,6 +159,16 @@ struct GardenScreen: View {
                         Spacer(); stat("지금의 크기", String(format: "%.1f cm", garden.growth.size))
                         Spacer(); stat("기분", "몽글몽글")
                     }
+                    NavigationLink { BreedScreen() } label: {
+                        HStack {
+                            Label("교배하러 가기", systemImage: "heart.circle").font(.subheadline.weight(.medium))
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.caption)
+                        }
+                        .padding(.horizontal, 20).padding(.vertical, 16)
+                        .background(.white.opacity(0.65), in: RoundedRectangle(cornerRadius: 16))
+                    }
+                    .buttonStyle(.plain)
                     VStack(alignment: .leading, spacing: 10) {
                         Label("순간을 먹고, 조금씩 자라요", systemImage: "leaf") .font(.subheadline.weight(.medium))
                         Text("일상 사진은 +12, 음식 사진은 +20 EXP. 빛과 선명도에 따라 최대 +10을 더 받아요. 100 EXP마다 한 레벨씩 자라요.").font(.caption).lineSpacing(5).foregroundStyle(.secondary)
