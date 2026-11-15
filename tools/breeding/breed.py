@@ -32,7 +32,7 @@ STYLE = (
 )
 BACKGROUND = {
     "transparent": "Transparent background.",
-    # For the ChatGPT app or any tool without transparency: a flat color the cutout step can remove.
+    # Only for tools without transparency: a flat color the cutout step can remove.
     "gray": "Plain flat mid-gray (#808080) background with no gradient, no floor and no shadow.",
 }
 
@@ -230,7 +230,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
     p = sub.add_parser("prompts", help="조합별 프롬프트를 prompts.md로 저장")
-    p.add_argument("--background", choices=BACKGROUND, default="gray", help="ChatGPT 앱은 gray, API는 transparent")
+    p.add_argument("--background", choices=BACKGROUND, default="transparent", help="기본은 투명 배경, 투명이 안 되는 도구는 gray")
     p.add_argument("--events", action="store_true", help="이벤트 친구(해피)도 포함")
     p.set_defaults(func=cmd_prompts)
     g = sub.add_parser("generate", help="이미지 API로 생성 (OPENAI_API_KEY 필요)")
