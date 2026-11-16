@@ -17,6 +17,8 @@ struct CameraScreen: View {
     @AppStorage("district") private var districtRaw = ""
     @StateObject private var locator = DistrictLocator()
     @AppStorage("companion") private var companionRaw = ""
+    /// Whether the floating friend is also drawn into the photo, or only floats on screen.
+    @AppStorage("companionInPhoto") private var companionInPhoto = true
     @State private var mode: CaptureMode = .auto
     @State private var flash = false
     @State private var processing = false
@@ -118,7 +120,7 @@ struct CameraScreen: View {
             guard !processing else { selectedItem = nil; return }
             processing = true
             closeEyes()
-            let capturedMode = mode, stamp = dateStamp, together = companion
+            let capturedMode = mode, stamp = dateStamp, together = companionInPhoto ? companion : nil
             Task {
                 do {
                     guard let data = try await item.loadTransferable(type: Data.self) else {
@@ -217,21 +219,31 @@ struct CameraScreen: View {
                 Spacer()
                 Menu {
                     ForEach(CaptureMode.allCases) { value in Button(value.title) { mode = value } }
-                    Section("같이 찍기") {
-                        Picker("같이 찍기", selection: $companionRaw) {
-                            Text("혼자 찍기").tag("")
+                    Section("떠 있는 친구") {
+                        Picker("떠 있는 친구", selection: $companionRaw) {
+                            Text("기본 모리").tag("")
                             ForEach(ownedCompanions) { friend in Text(friend.menuTitle).tag(friend.rawValue) }
+                        }
+                    }
+                    if companion != nil {
+                        Section {
+                            Toggle("사진에 같이 찍기", isOn: $companionInPhoto)
+                        } footer: {
+                            Text(companionInPhoto ? "떠 있는 자리 그대로 사진에 함께 담겨요." : "화면에만 떠 있고 사진에는 안 찍혀요.")
                         }
                     }
                 } label: {
                     HStack(spacing: 5) {
                         Text(companion.map { "\(mode.title) · \($0.title)" } ?? mode.title)
+                        if companion != nil && companionInPhoto {
+                            Image(systemName: "camera.fill").font(.system(size: 8))
+                        }
                         Image(systemName: "chevron.down").font(.system(size: 8))
                     }
                         .font(.system(size: 11, weight: .medium)).padding(.horizontal, 15).frame(height: 38)
                         .background(.black.opacity(0.25), in: Capsule())
                 }.disabled(blocked)
-                    .accessibilityLabel("촬영 모드, \(mode.title), \(companion.map { "\($0.title)와 같이 찍기" } ?? "혼자 찍기")")
+                    .accessibilityLabel("촬영 모드, \(mode.title), \(companion.map { "\($0.title), " + (companionInPhoto ? "사진에 같이 찍기" : "화면에만") } ?? "기본 모리")")
                 Spacer()
                 Button { camera.flip() } label: {
                     Image(systemName: "arrow.triangle.2.circlepath.camera").font(.system(size: 21)).frame(width: 48, height: 48)
@@ -332,7 +344,7 @@ struct CameraScreen: View {
         }
         processing = true
         closeEyes()
-        let capturedMode = mode, stamp = dateStamp, together = companion
+        let capturedMode = mode, stamp = dateStamp, together = companionInPhoto ? companion : nil
         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
         camera.capture(flash: flash) { result in
             switch result {
