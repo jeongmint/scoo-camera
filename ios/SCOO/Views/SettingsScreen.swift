@@ -10,6 +10,9 @@ struct SettingsScreen: View {
     @AppStorage("unlockAllFriends") private var unlockAll = false
     @AppStorage("savePlace") private var savePlace = true
     @AppStorage("bottleFastMode") private var bottleFast = false
+    @AppStorage("bottleOnline") private var bottleOnline = true
+    @State private var accountID: String?
+    @State private var connecting = false
     @StateObject private var locator = DistrictLocator()
     @State private var finding = false
     @State private var note: String?
@@ -37,6 +40,20 @@ struct SettingsScreen: View {
                 } header: { Text("동네 친구 (테스트)") } footer: {
                     Text("서울 25개 구마다 잘 만나는 친구가 달라요. 구의 친구가 70%, 나머지는 다른 친구예요. 새로 받아도 사진과 성장 기록은 그대로예요. ‘모든 친구 열기’를 켜면 교배 화면에서 25종을 모두 고를 수 있어요.")
                 }
+                Section {
+                    if SupabaseConfig.isConfigured {
+                        LabeledContent("계정", value: accountID.map { "익명 · \($0.prefix(8))" } ?? "아직 연결 안 됨")
+                        if accountID == nil {
+                            Button(connecting ? "연결 중…" : "서버에 연결하기") { Task { await connect() } }.disabled(connecting)
+                        }
+                        Toggle("유리병을 진짜 사람들과 주고받기", isOn: $bottleOnline)
+                    } else {
+                        Text("서버 키가 아직 없어서 유리병은 이 기기 안에서만 시험해요.").font(.footnote)
+                    }
+                } header: { Text("계정 · 서버") } footer: {
+                    Text("로그인 없이 익명 계정으로 시작해요. 계정 정보는 이 iPhone의 키체인에 보관돼요. 끄면 유리병은 기기 안의 가짜 바다로 돌아가요.")
+                }
+                .task { accountID = await SupabaseClient.shared.currentUserID }
                 Section("Eternal") {
                     Text("차가운 회색 그림자와 따뜻한 빛, 짙은 검정과 작은 디지털 입자. 필터는 Eternal 하나만 사용해요.").font(.footnote)
                 }
@@ -57,6 +74,13 @@ struct SettingsScreen: View {
                 .navigationTitle("작은 설정").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("완료") { dismiss() } } }
         }
+    }
+
+    private func connect() async {
+        connecting = true
+        defer { connecting = false }
+        do { accountID = try await SupabaseClient.shared.signIn().userID }
+        catch { note = error.localizedDescription }
     }
 
     private func receive(in district: SeoulDistrict) {

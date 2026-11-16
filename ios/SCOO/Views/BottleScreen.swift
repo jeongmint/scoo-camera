@@ -2,11 +2,11 @@ import SwiftUI
 import UIKit
 
 /// 유리병 입양: send a baby off to someone, receive one from somewhere in Seoul, and read letters from babies that left.
-/// The other side is simulated on this device for now (`LocalOcean`).
+/// With the server configured the other side is real people; otherwise it is simulated on this device (`LocalOcean`).
 struct BottleScreen: View {
     @EnvironmentObject private var garden: GardenStore
     @StateObject private var breeds = BreedStore()
-    @StateObject private var bottles = BottleStore()
+    @StateObject private var bottles = BottleStore.preferred()
     @AppStorage("bottleFastMode") private var fast = false
     @AppStorage("district") private var districtRaw = ""
     @State private var picked: UUID?
@@ -22,6 +22,9 @@ struct BottleScreen: View {
                 VStack(alignment: .leading, spacing: 26) {
                     Text("키운 아이를 유리병에 담아 띄우면, 바다 어딘가에서 다른 유리병이 떠내려와요. 보낸 아이는 가끔 편지를 보내요.")
                         .font(.footnote).foregroundStyle(.secondary)
+                    Label(bottles.isOnline ? "진짜 사람들과 주고받는 중" : "이 기기 안에서 시험하는 중",
+                          systemImage: bottles.isOnline ? "globe.asia.australia" : "iphone")
+                        .font(.caption2).foregroundStyle(Palette.sage)
                     arrived(now)
                     send(now)
                     traveling(now)
@@ -29,12 +32,21 @@ struct BottleScreen: View {
                 }
                 .padding(22)
             }
+            .refreshable { await bottles.load() }
         }
         .background(Palette.cream)
         .foregroundStyle(Palette.ink)
         .navigationTitle("유리병 입양")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { breeds.load(); bottles.load() }
+        .onAppear { breeds.load() }
+        .task {
+            await bottles.load()
+            // Online, bottles can be matched by other people at any time: look again every half minute.
+            while bottles.isOnline && !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(30))
+                await bottles.load()
+            }
+        }
         .overlay { if drifting { DriftingBottle().transition(.opacity) } }
         .sheet(item: $adopted) { baby in AdoptedSheet(baby: baby) }
         .alert("유리병", isPresented: Binding(get: { error != nil || bottles.message != nil },
@@ -59,6 +71,7 @@ struct BottleScreen: View {
                         }
                         Spacer()
                         Button("열어보기") { open(bottle) }
+                            .disabled(bottles.busy)
                             .font(.caption.weight(.semibold)).padding(.horizontal, 14).padding(.vertical, 8)
                             .background(Palette.moss, in: Capsule()).foregroundStyle(.white)
                     }
@@ -70,12 +83,14 @@ struct BottleScreen: View {
     }
 
     private func open(_ bottle: Bottle) {
-        do {
-            let baby = try bottles.open(bottle, breeds: breeds, moments: garden.snapshot.moments)
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
-            adopted = baby
-        } catch {
-            self.error = error.localizedDescription
+        Task {
+            do {
+                let baby = try await bottles.open(bottle, breeds: breeds, moments: garden.snapshot.moments)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                adopted = baby
+            } catch {
+                self.error = error.localizedDescription
+            }
         }
     }
 
@@ -110,7 +125,7 @@ struct BottleScreen: View {
                         .background(picked != nil && allowed ? Palette.moss : Palette.sage.opacity(0.35), in: Capsule())
                         .foregroundStyle(.white)
                 }
-                .disabled(picked == nil || !allowed)
+                .disabled(picked == nil || !allowed || bottles.busy)
                 Text(allowed ? "띄운 아이는 내 목록에서 떠나요. 되돌릴 수 없어요." : "오늘은 이미 유리병을 띄웠어요. 내일 또 띄울 수 있어요.")
                     .font(.caption).foregroundStyle(.secondary)
             }
@@ -119,17 +134,18 @@ struct BottleScreen: View {
 
     private func sendPicked(_ now: Date) {
         guard let id = picked, let baby = breeds.breeds.first(where: { $0.id == id }) else { return }
-        do {
-            try bottles.send(baby, wantsNews: wantsNews, from: districtRaw.isEmpty ? nil : districtRaw, breeds: breeds, fast: fast, now: now)
-            picked = nil
-            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-            withAnimation { drifting = true }
-            Task {
+        Task {
+            do {
+                try await bottles.send(baby, wantsNews: wantsNews, from: districtRaw.isEmpty ? nil : districtRaw,
+                                       breeds: breeds, fast: fast, now: now)
+                picked = nil
+                UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+                withAnimation { drifting = true }
                 try? await Task.sleep(for: .seconds(1.8))
                 withAnimation { drifting = false }
+            } catch {
+                self.error = error.localizedDescription
             }
-        } catch {
-            self.error = error.localizedDescription
         }
     }
 
@@ -146,11 +162,16 @@ struct BottleScreen: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(bottle.direction == .outgoing ? "\(bottle.title) · 가는 중" : "어딘가에서 떠내려오는 중")
                                 .font(.subheadline)
-                            HStack(spacing: 3) {
-                                Text(bottle.arrivesAt, style: .relative)
-                                Text("뒤 도착")
+                            if bottle.isWaitingAtSea {
+                                Text("바다에서 짝을 기다리는 중 · 누군가 유리병을 띄우면 서로 바뀌어요")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            } else {
+                                HStack(spacing: 3) {
+                                    Text(bottle.arrivesAt, style: .relative)
+                                    Text("뒤 도착")
+                                }
+                                .font(.caption).foregroundStyle(.secondary)
                             }
-                            .font(.caption).foregroundStyle(.secondary)
                         }
                     }
                 }

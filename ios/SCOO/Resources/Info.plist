@@ -15,6 +15,7 @@
 <key>NSLocationWhenInUseUsageDescription</key><string>지금 있는 서울의 구를 확인해 동네 친구를 만나고, 사진을 찍은 자리를 지도 방명록에 남기기 위해 위치를 사용해요. 사진 위치는 이 iPhone 안에만 저장돼요.</string>
 <key>NSPhotoLibraryAddUsageDescription</key><string>완성한 빈티지 사진을 iPhone 사진 앱에 저장해요.</string>
 <key>NSSupportsLiveActivities</key><true/>
+<key>SupabaseAnonKey</key><string>$(SUPABASE_ANON_KEY)</string>
 <key>UILaunchScreen</key><dict/>
 <key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string></array>
 <key>UIApplicationSupportsIndirectInputEvents</key><true/>

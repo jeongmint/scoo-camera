@@ -56,28 +56,51 @@ final class BottleTests: XCTestCase {
     }
 
     @MainActor
-    func testSendingAndOpeningMovesBabies() throws {
+    func testSendingAndOpeningMovesBabies() async throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: folder) }
         let breeds = BreedStore(directory: folder)
         let bottles = BottleStore(directory: folder)
+        XCTAssertFalse(bottles.isOnline)
         let baby = try breeds.hatch(a: "tori", b: "sia", moments: 0, now: start)
 
-        try bottles.send(baby, wantsNews: true, from: "마포구", breeds: breeds, fast: true, now: start)
+        try await bottles.send(baby, wantsNews: true, from: "마포구", breeds: breeds, fast: true, now: start)
         XCTAssertTrue(breeds.breeds.isEmpty, "띄운 아이는 목록에서 떠나요")
         XCTAssertEqual(bottles.bottles.count, 2)
         let incoming = try XCTUnwrap(bottles.bottles.first { $0.direction == .incoming })
-        XCTAssertThrowsError(try bottles.open(incoming, breeds: breeds, moments: 5, now: start), "도착 전엔 열 수 없어요")
+        do {
+            try await bottles.open(incoming, breeds: breeds, moments: 5, now: start)
+            XCTFail("도착 전엔 열 수 없어요")
+        } catch { }
 
         let later = incoming.arrivesAt.addingTimeInterval(1)
-        let adopted = try bottles.open(incoming, breeds: breeds, moments: 5, now: later)
+        let adopted = try await bottles.open(incoming, breeds: breeds, moments: 5, now: later)
         XCTAssertEqual(adopted.origin, incoming.origin)
         XCTAssertEqual(breeds.breeds.map(\.id), [adopted.id])
         XCTAssertTrue(bottles.bottles.first { $0.id == incoming.id }?.opened ?? false)
-        XCTAssertThrowsError(try bottles.open(incoming, breeds: breeds, moments: 5, now: later), "한 번만 열려요")
+        do {
+            try await bottles.open(incoming, breeds: breeds, moments: 5, now: later)
+            XCTFail("한 번만 열려요")
+        } catch { }
 
         let reopened = BottleStore(directory: folder)
-        reopened.load()
+        await reopened.load()
         XCTAssertEqual(reopened.bottles, bottles.bottles)
+    }
+
+    func testServerTimestampsParse() {
+        XCTAssertNotNil(SupabaseClient.parseTimestamp("2026-11-16T04:36:22.921163+00:00"))
+        XCTAssertNotNil(SupabaseClient.parseTimestamp("2026-11-16T04:36:22+00:00"))
+        XCTAssertNotNil(SupabaseClient.parseTimestamp("2026-11-16T04:36:22.9Z"))
+        XCTAssertNil(SupabaseClient.parseTimestamp("어제"))
+    }
+
+    func testWaitingBottleHasNoArrivalOrLetters() {
+        var bottle = outgoing(at: start)
+        bottle = Bottle(id: bottle.id, direction: .outgoing, parentA: "tori", parentB: "sia", origin: "성동구",
+                        sentAt: start, arrivesAt: .distantFuture, wantsNews: true)
+        XCTAssertTrue(bottle.isWaitingAtSea)
+        XCTAssertFalse(bottle.hasArrived(at: start.addingTimeInterval(1_000_000)))
+        XCTAssertTrue(BottleRules.letters(for: [bottle], now: start.addingTimeInterval(1_000_000), fast: false).isEmpty)
     }
 }
