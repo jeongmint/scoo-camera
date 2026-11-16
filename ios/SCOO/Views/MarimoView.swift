@@ -4,8 +4,11 @@ import UIKit
 struct MarimoView: View {
     var size: CGFloat = 110
     var happy = false
+    /// Overrides the face. When nil, `happy` picks between 방긋 and 평소 미소.
+    var expression: MoriExpression? = nil
     var floats = true
     @State private var floating = false
+    private var face: MoriExpression { expression ?? (happy ? .smile : .normal) }
 
     var body: some View {
         Canvas { context, bounds in
@@ -28,22 +31,97 @@ struct MarimoView: View {
                 context.stroke(strand, with: .color(Color(hue: 0.23 + random() * 0.08, saturation: 0.45 + random() * 0.2,
                                                           brightness: 0.25 + random() * 0.38).opacity(0.8)), lineWidth: max(0.45, size / 230))
             }
-            for offset in [-0.19, 0.19] {
-                let eye = CGRect(x: center.x + radius * CGFloat(offset) - size * 0.012, y: center.y + size * 0.012,
-                                 width: size * 0.025, height: happy ? size * 0.018 : size * 0.035)
-                context.fill(Path(ellipseIn: eye), with: .color(Palette.ink))
-            }
-            var smile = Path()
-            smile.addArc(center: CGPoint(x: center.x, y: center.y + size * 0.055), radius: size * 0.035,
-                         startAngle: .degrees(10), endAngle: .degrees(170), clockwise: false)
-            context.stroke(smile, with: .color(Palette.ink), style: StrokeStyle(lineWidth: max(1, size / 140), lineCap: .round))
+            drawFace(in: &context, center: center, radius: radius)
         }
         .frame(width: size, height: size)
         .offset(y: floats ? (floating ? -4 : 3) : 0)
-        .rotationEffect(.degrees(floats ? (floating ? (happy ? 6 : 2) : -2) : 0))
-        .animation(.easeInOut(duration: happy ? 0.3 : 2.5).repeatForever(autoreverses: true), value: floating)
+        .rotationEffect(.degrees(floats ? (floating ? (face != .normal ? 6 : 2) : -2) : 0))
+        .animation(.easeInOut(duration: face != .normal ? 0.3 : 2.5).repeatForever(autoreverses: true), value: floating)
         .onAppear { floating = true }
         .accessibilityLabel("보송한 초록 마리모")
+    }
+
+    /// Eyes, mouth and cheeks for the current expression, in the same place the plain face always had them.
+    private func drawFace(in context: inout GraphicsContext, center: CGPoint, radius: CGFloat) {
+        let s = size
+        let ink = GraphicsContext.Shading.color(Palette.ink)
+        let stroke = StrokeStyle(lineWidth: max(1, s / 140), lineCap: .round)
+        let eyeXs = [center.x - radius * 0.19, center.x + radius * 0.19]
+        let eyeTop = center.y + s * 0.012
+        let mouthY = center.y + s * 0.055
+
+        func dots(width: CGFloat, height: CGFloat) -> Path {
+            var path = Path()
+            for x in eyeXs { path.addEllipse(in: CGRect(x: x - width / 2, y: eyeTop, width: width, height: height)) }
+            return path
+        }
+        /// Closed eyes: positive `bow` bends up (⌒), negative bends down (‿).
+        func lids(bow: CGFloat) -> Path {
+            var path = Path()
+            let y = eyeTop + s * 0.02
+            for x in eyeXs {
+                path.move(to: CGPoint(x: x - s * 0.017, y: y))
+                path.addQuadCurve(to: CGPoint(x: x + s * 0.017, y: y), control: CGPoint(x: x, y: y - bow * 2))
+            }
+            return path
+        }
+        func smile() -> Path {
+            var path = Path()
+            path.addArc(center: CGPoint(x: center.x, y: mouthY), radius: s * 0.035,
+                        startAngle: .degrees(10), endAngle: .degrees(170), clockwise: false)
+            return path
+        }
+        func openMouth(width: CGFloat, depth: CGFloat) -> Path {
+            var path = Path()
+            path.move(to: CGPoint(x: center.x - width / 2, y: mouthY))
+            path.addQuadCurve(to: CGPoint(x: center.x + width / 2, y: mouthY), control: CGPoint(x: center.x, y: mouthY + depth * 2))
+            path.closeSubpath()
+            return path
+        }
+        func cheeks() -> Path {
+            var path = Path()
+            for (index, x) in eyeXs.enumerated() {
+                let outward = index == 0 ? -s * 0.045 : s * 0.045
+                path.addEllipse(in: CGRect(x: x + outward - s * 0.018, y: eyeTop + s * 0.04, width: s * 0.036, height: s * 0.02))
+            }
+            return path
+        }
+        let blush = GraphicsContext.Shading.color(Color(red: 1, green: 0.62, blue: 0.62).opacity(0.5))
+        let tongue = GraphicsContext.Shading.color(Color(red: 1, green: 0.55, blue: 0.58))
+
+        switch face {
+        case .normal:
+            context.fill(dots(width: s * 0.025, height: s * 0.035), with: ink)
+            context.stroke(smile(), with: ink, style: stroke)
+        case .shutter:
+            context.stroke(lids(bow: -s * 0.014), with: ink, style: stroke)
+            context.stroke(smile(), with: ink, style: stroke)
+        case .surprised:
+            var brows = Path()
+            for x in eyeXs {
+                brows.move(to: CGPoint(x: x - s * 0.015, y: eyeTop - s * 0.012))
+                brows.addQuadCurve(to: CGPoint(x: x + s * 0.015, y: eyeTop - s * 0.012), control: CGPoint(x: x, y: eyeTop - s * 0.03))
+            }
+            context.stroke(brows, with: ink, style: StrokeStyle(lineWidth: max(0.8, s / 190), lineCap: .round))
+            context.fill(dots(width: s * 0.026, height: s * 0.045), with: ink)
+            context.stroke(Path(ellipseIn: CGRect(x: center.x - s * 0.011, y: mouthY + s * 0.012, width: s * 0.022, height: s * 0.028)),
+                           with: ink, style: stroke)
+        case .smile:
+            context.fill(cheeks(), with: blush)
+            context.stroke(lids(bow: s * 0.02), with: ink, style: stroke)
+            context.fill(openMouth(width: s * 0.08, depth: s * 0.034), with: ink)
+        case .awe:
+            context.fill(cheeks(), with: blush)
+            context.fill(dots(width: s * 0.034, height: s * 0.042), with: ink)
+            var sparkles = Path()
+            for x in eyeXs { sparkles.addEllipse(in: CGRect(x: x - s * 0.011, y: eyeTop + s * 0.006, width: s * 0.011, height: s * 0.011)) }
+            context.fill(sparkles, with: .color(.white.opacity(0.95)))
+            context.fill(openMouth(width: s * 0.056, depth: s * 0.03), with: ink)
+        case .yum:
+            context.stroke(lids(bow: s * 0.02), with: ink, style: stroke)
+            context.fill(Path(ellipseIn: CGRect(x: center.x + s * 0.004, y: mouthY + s * 0.03, width: s * 0.024, height: s * 0.03)), with: tongue)
+            context.stroke(smile(), with: ink, style: stroke)
+        }
     }
 }
 
@@ -81,6 +159,16 @@ struct GardenScreen: View {
                         Spacer(); stat("지금의 크기", String(format: "%.1f cm", garden.growth.size))
                         Spacer(); stat("기분", "몽글몽글")
                     }
+                    NavigationLink { BreedScreen() } label: {
+                        HStack {
+                            Label("교배하러 가기", systemImage: "heart.circle").font(.subheadline.weight(.medium))
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.caption)
+                        }
+                        .padding(.horizontal, 20).padding(.vertical, 16)
+                        .background(.white.opacity(0.65), in: RoundedRectangle(cornerRadius: 16))
+                    }
+                    .buttonStyle(.plain)
                     VStack(alignment: .leading, spacing: 10) {
                         Label("순간을 먹고, 조금씩 자라요", systemImage: "leaf") .font(.subheadline.weight(.medium))
                         Text("일상 사진은 +12, 음식 사진은 +20 EXP. 빛과 선명도에 따라 최대 +10을 더 받아요. 100 EXP마다 한 레벨씩 자라요.").font(.caption).lineSpacing(5).foregroundStyle(.secondary)

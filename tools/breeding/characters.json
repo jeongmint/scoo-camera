@@ -1,0 +1,120 @@
+{
+  "_note": "교배 부모 후보. image는 저장소 루트 기준 경로. event는 이벤트 캐릭터라 기본 조합에서 빠진다. 새 캐릭터는 breed.py add 명령으로 추가한다.",
+  "characters": {
+    "gwiyo": {
+      "name": "귀요",
+      "image": "ios/SCOO/Resources/Assets.xcassets/Companion-gwiyo.imageset/gwiyo.png"
+    },
+    "kuru": {
+      "name": "쿠르",
+      "image": "ios/SCOO/Resources/Assets.xcassets/Companion-kuru.imageset/kuru.png"
+    },
+    "mori": {
+      "name": "모리",
+      "image": "ios/SCOO/Resources/Assets.xcassets/Companion-mori.imageset/mori.png"
+    },
+    "nyamo": {
+      "name": "냐모",
+      "image": "ios/SCOO/Resources/Assets.xcassets/Companion-nyamo.imageset/nyamo.png",
+      "daisy": {
+        "x": 0.26,
+        "below_ears": true,
+        "drop": 0.25
+      }
+    },
+    "happy": {
+      "name": "해피",
+      "image": "ios/SCOO/Resources/Assets.xcassets/Companion-happy.imageset/happy.png",
+      "event": true
+    },
+    "huu": {
+      "name": "후우",
+      "image": "tools/breeding/characters/huu.png"
+    },
+    "chiko": {
+      "name": "치코",
+      "image": "tools/breeding/characters/chiko.png",
+      "daisy": {
+        "x": 0.26,
+        "below_ears": true,
+        "drop": 0.25
+      }
+    },
+    "dochi": {
+      "name": "도치",
+      "image": "tools/breeding/characters/dochi.png"
+    },
+    "luna": {
+      "name": "루나",
+      "image": "tools/breeding/characters/luna.png"
+    },
+    "toto": {
+      "name": "토토",
+      "image": "tools/breeding/characters/toto.png"
+    },
+    "sunny": {
+      "name": "써니",
+      "image": "tools/breeding/characters/sunny.png"
+    },
+    "suri": {
+      "name": "수리",
+      "image": "tools/breeding/characters/suri.png"
+    },
+    "mellu": {
+      "name": "멜루",
+      "image": "tools/breeding/characters/mellu.png"
+    },
+    "riru": {
+      "name": "리루",
+      "image": "tools/breeding/characters/riru.png"
+    },
+    "popo": {
+      "name": "포포",
+      "image": "tools/breeding/characters/popo.png"
+    },
+    "tangerine": {
+      "name": "귤",
+      "image": "tools/breeding/characters/tangerine.png"
+    },
+    "baseball": {
+      "name": "야구공",
+      "image": "tools/breeding/characters/baseball.png"
+    },
+    "otter": {
+      "name": "튜브를 한 수달",
+      "image": "tools/breeding/characters/otter.png"
+    },
+    "yarn": {
+      "name": "실타래",
+      "image": "tools/breeding/characters/yarn.png"
+    },
+    "tori": {
+      "name": "토리",
+      "image": "tools/breeding/characters/tori.png",
+      "daisy": {
+        "x": 0.33,
+        "below_ears": true
+      }
+    },
+    "mupu": {
+      "name": "무푸",
+      "image": "tools/breeding/characters/mupu.png"
+    },
+    "deogi": {
+      "name": "더기",
+      "image": "tools/breeding/characters/deogi.png"
+    },
+    "hechi": {
+      "name": "헤치",
+      "image": "tools/breeding/characters/hechi.png"
+    },
+    "sia": {
+      "name": "시아",
+      "image": "tools/breeding/characters/sia.png"
+    },
+    "dia": {
+      "name": "디아",
+      "image": "tools/breeding/characters/dia.png"
+    }
+  }
+}
