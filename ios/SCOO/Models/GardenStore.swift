@@ -27,14 +27,14 @@ actor PhotoRepository {
         snapshot = next
     }
 
-    func add(_ processed: ProcessedPhoto, filter: FilmLook, mode: CaptureMode) throws -> GardenSnapshot {
+    func add(_ processed: ProcessedPhoto, filter: FilmLook, mode: CaptureMode, location: PhotoLocation? = nil) throws -> GardenSnapshot {
         var next = try load()
         let id = UUID()
         let filename = "\(id.uuidString).jpg"
         let gain = GrowthRules.reward(isFood: processed.isFood, bonus: processed.bonus)
         let photo = PhotoRecord(id: id, date: Date(), filename: filename, filter: filter.rawValue,
                                 isFood: processed.isFood, mode: mode, experience: gain,
-                                bonus: processed.bonus, classificationNote: processed.classificationNote)
+                                bonus: processed.bonus, classificationNote: processed.classificationNote, location: location)
         let url = Self.directory.appendingPathComponent(filename)
         try processed.jpeg.write(to: url, options: .atomic)
         next.photos.insert(photo, at: 0)
@@ -80,9 +80,9 @@ final class GardenStore: ObservableObject {
     }
 
     @discardableResult
-    func add(_ photo: ProcessedPhoto, filter: FilmLook, mode: CaptureMode) async throws -> Int {
+    func add(_ photo: ProcessedPhoto, filter: FilmLook, mode: CaptureMode, location: PhotoLocation? = nil) async throws -> Int {
         let previous = snapshot.experience
-        snapshot = try await repository.add(photo, filter: filter, mode: mode)
+        snapshot = try await repository.add(photo, filter: filter, mode: mode, location: location)
         WidgetBridge.publish(snapshot)
         return snapshot.experience - previous
     }

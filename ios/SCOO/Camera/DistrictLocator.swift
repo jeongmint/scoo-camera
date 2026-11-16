@@ -1,9 +1,9 @@
 import Foundation
 import CoreLocation
 
-/// Works out which Seoul district the user is in, once, when asked.
-/// Only a rough position is requested, nothing is stored, and no tracking starts.
-/// The coordinate goes to Apple's geocoder to get an address name; it is not sent anywhere else.
+/// Works out which Seoul district the user is in, and where a photo was taken.
+/// Positions are requested one at a time (no tracking). For the district the coordinate goes to Apple's geocoder;
+/// photo positions are kept only in the app's local garden file for the map guestbook.
 @MainActor
 final class DistrictLocator: NSObject, ObservableObject, CLLocationManagerDelegate {
     enum Failure: Error, Equatable {
@@ -27,7 +27,7 @@ final class DistrictLocator: NSObject, ObservableObject, CLLocationManagerDelega
     override init() {
         super.init()
         manager.delegate = self
-        manager.desiredAccuracy = kCLLocationAccuracyKilometer   // a district is enough
+        manager.desiredAccuracy = kCLLocationAccuracyHundredMeters   // enough for a district and a map pin
     }
 
     func currentDistrict() async -> Result<SeoulDistrict, Failure> {
@@ -54,13 +54,27 @@ final class DistrictLocator: NSObject, ObservableObject, CLLocationManagerDelega
         }
     }
 
-    /// One position fix, giving up after ten seconds.
-    private func locate() async -> CLLocation? {
+    /// Where the user is right now, for the map guestbook: a recent fix if there is one, otherwise a quick new one.
+    /// Never asks for permission (the first launch already did) and gives up after a few seconds.
+    func quickLocation() async -> PhotoLocation? {
+        switch manager.authorizationStatus {
+        case .authorizedWhenInUse, .authorizedAlways: break
+        default: return nil
+        }
+        if let last = manager.location, -last.timestamp.timeIntervalSinceNow < 120, last.horizontalAccuracy < 1_000 {
+            return PhotoLocation(latitude: last.coordinate.latitude, longitude: last.coordinate.longitude)
+        }
+        guard position == nil, let fix = await locate(timeout: 4) else { return nil }
+        return PhotoLocation(latitude: fix.coordinate.latitude, longitude: fix.coordinate.longitude)
+    }
+
+    /// One position fix, giving up after `timeout` seconds.
+    private func locate(timeout: Double = 10) async -> CLLocation? {
         await withCheckedContinuation { continuation in
             position = continuation
             manager.requestLocation()
             Task { [weak self] in
-                try? await Task.sleep(for: .seconds(10))
+                try? await Task.sleep(for: .seconds(timeout))
                 self?.finishLocate(nil)
             }
         }

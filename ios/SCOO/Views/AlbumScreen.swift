@@ -54,7 +54,7 @@ struct PhotoThumbnail: View {
     }
 }
 
-private struct PhotoDetail: View {
+struct PhotoDetail: View {
     let photo: PhotoRecord
     @EnvironmentObject private var garden: GardenStore
     @Environment(\.dismiss) private var dismiss
@@ -71,6 +71,7 @@ private struct PhotoDetail: View {
                     Text(photo.date, format: .dateTime.year().month().day().hour().minute()).font(.caption).foregroundStyle(.secondary)
                     Text(photo.classificationNote).font(.caption).foregroundStyle(.secondary)
                     Text("빛·선명도 보너스 +\(photo.bonus)").font(.caption).foregroundStyle(Palette.moss)
+                    if photo.location != nil { Label("지도 방명록에 남은 순간", systemImage: "mappin.and.ellipse").font(.caption).foregroundStyle(.secondary) }
                     Button {
                         saving = true
                         Task {

@@ -19,6 +19,8 @@ struct CameraScreen: View {
     @AppStorage("companion") private var companionRaw = ""
     /// Whether the floating friend is also drawn into the photo, or only floats on screen.
     @AppStorage("companionInPhoto") private var companionInPhoto = true
+    /// Leave each photo's spot on the map guestbook.
+    @AppStorage("savePlace") private var savePlace = true
     @State private var mode: CaptureMode = .auto
     @State private var flash = false
     @State private var processing = false
@@ -40,7 +42,7 @@ struct CameraScreen: View {
     @State private var lastReaction: MoriExpression?
 
     private enum CameraSheet: String, Identifiable {
-        case album, garden, settings
+        case album, garden, settings, map
         var id: String { rawValue }
     }
     private let look = FilmLook.eternal
@@ -129,7 +131,9 @@ struct CameraScreen: View {
                     // Imported photos keep their original aspect ratio.
                     // Imported photos keep their own size; use the saved floating spot at a standard size.
                     let spot = CompanionSpot(center: CGPoint(x: savedMoriX, y: savedMoriY), width: CompanionSpot.defaultWidth)
-                    await process(data, mode: capturedMode, stamp: stamp, aspect: nil, companion: together, spot: spot)
+                    // Imported photos land on the map where they were taken, if they carry GPS.
+                    let place = savePlace ? PhotoLocation.fromImageData(data) : nil
+                    await process(data, mode: capturedMode, stamp: stamp, aspect: nil, companion: together, spot: spot, place: place)
                 } catch { processing = false; calmDown(); notify(error.localizedDescription) }
                 selectedItem = nil
             }
@@ -146,6 +150,7 @@ struct CameraScreen: View {
             case .album: AlbumScreen().environmentObject(garden)
             case .garden: GardenScreen().environmentObject(garden)
             case .settings: SettingsScreen()
+            case .map: PlaceMapScreen().environmentObject(garden)
             }
         }
         .photosPicker(isPresented: $importing, selection: $selectedItem, matching: .images)
@@ -213,6 +218,7 @@ struct CameraScreen: View {
             HStack {
                 Menu {
                     Button("앱 앨범", systemImage: "photo.on.rectangle") { sheet = .album }
+                    Button("지도 방명록", systemImage: "map") { sheet = .map }
                     Button("사진 불러오기", systemImage: "photo.badge.plus") { importing = true }
                 } label: { Image(systemName: "photo.on.rectangle").font(.system(size: 20)).frame(width: 48, height: 48) }
                     .disabled(blocked).accessibilityLabel("앨범과 사진 불러오기")
@@ -345,10 +351,15 @@ struct CameraScreen: View {
         processing = true
         closeEyes()
         let capturedMode = mode, stamp = dateStamp, together = companionInPhoto ? companion : nil
+        // Look up where we are while the shutter works, so the photo does not wait for GPS.
+        let placeLookup: Task<PhotoLocation?, Never>? = savePlace ? Task { await locator.quickLocation() } : nil
         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
         camera.capture(flash: flash) { result in
             switch result {
-            case .success(let data): Task { await process(data, mode: capturedMode, stamp: stamp, aspect: aspect, companion: together, spot: spot) }
+            case .success(let data): Task {
+                let place = await placeLookup?.value
+                await process(data, mode: capturedMode, stamp: stamp, aspect: aspect, companion: together, spot: spot, place: place)
+            }
             case .failure(let error): processing = false; calmDown(); notify(error.localizedDescription)
             }
         }
@@ -412,12 +423,13 @@ struct CameraScreen: View {
         }
     }
 
-    private func process(_ data: Data, mode: CaptureMode, stamp: Bool, aspect: CGFloat?, companion: Companion?, spot: CompanionSpot) async {
+    private func process(_ data: Data, mode: CaptureMode, stamp: Bool, aspect: CGFloat?, companion: Companion?, spot: CompanionSpot,
+                         place: PhotoLocation?) async {
         defer { processing = false }
         do {
             let oldLevel = garden.growth.level
             let result = try await pipeline.process(data: data, look: look, mode: mode, dateStamp: stamp, aspectRatio: aspect, companion: companion, spot: spot)
-            let gain = try await garden.add(result, filter: look, mode: mode)
+            let gain = try await garden.add(result, filter: look, mode: mode, location: place)
             react(MoriExpression.reaction(isFood: result.isFood, bonus: result.bonus, leveledUp: garden.growth.level > oldLevel,
                                           previous: lastReaction, roll: .random(in: 0..<1)))
             withAnimation(.easeOut(duration: 0.12)) { shutterFlash = true }

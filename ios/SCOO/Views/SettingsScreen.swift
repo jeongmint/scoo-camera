@@ -8,6 +8,7 @@ struct SettingsScreen: View {
     @AppStorage("assignedCompanion") private var assignedRaw = ""
     @AppStorage("district") private var districtRaw = ""
     @AppStorage("unlockAllFriends") private var unlockAll = false
+    @AppStorage("savePlace") private var savePlace = true
     @StateObject private var locator = DistrictLocator()
     @State private var finding = false
     @State private var note: String?
@@ -17,6 +18,7 @@ struct SettingsScreen: View {
                 Section {
                     Toggle("날짜 인쇄", isOn: $dateStamp)
                     Toggle("사진 앱에도 자동 저장", isOn: $autoSave)
+                    Toggle("찍은 자리를 지도에 남기기", isOn: $savePlace)
                 } header: { Text("카메라") } footer: { Text("앱 앨범에는 항상 저장해요. 자동 저장을 켜면 다음 촬영 후 사진 추가 권한을 요청해요.") }
                 Section {
                     LabeledContent("지금 동네", value: districtRaw.isEmpty ? "정해지지 않음" : districtRaw)
@@ -45,7 +47,7 @@ struct SettingsScreen: View {
                     Text("사진 보너스는 빛과 픽셀의 변화를 계산해요. 미적 감동이나 사진의 예술성을 평가하는 AI는 아직 연결하지 않았어요.")
                 }.font(.footnote)
                 Section("내 사진, 내 기기에") {
-                    Text("사진과 마리모 기록은 이 iPhone의 앱 보관함에 저장돼요. 서버 전송, 광고, 분석 SDK가 없어요. 동네 친구를 찾을 때만 대략적인 위치를 한 번 확인하고, 구 이름은 Apple 지도 서비스에서 받아와요. 위치는 저장하지 않아요. 앱을 삭제하면 보관함도 사라져요. 중요한 사진은 사진 앱에 저장해 주세요.").font(.footnote)
+                    Text("사진과 마리모 기록은 이 iPhone의 앱 보관함에 저장돼요. 서버 전송, 광고, 분석 SDK가 없어요. 동네 친구를 찾을 때 구 이름은 Apple 지도 서비스에서 받아와요. ‘찍은 자리를 지도에 남기기’를 켜면 사진마다 찍은 위치가 이 iPhone 안에만 저장돼 지도 방명록에 보여요. 앱을 삭제하면 보관함도 사라져요. 중요한 사진은 사진 앱에 저장해 주세요.").font(.footnote)
                     Button("iPhone 설정 열기") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
                 }
                 Section { HStack { Text("SCOO").font(.headline); Spacer(); Text("0.2 · Eternal").font(.caption2).foregroundStyle(.secondary) } }
