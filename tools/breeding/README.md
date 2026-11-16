@@ -27,6 +27,7 @@ export OPENAI_API_KEY=...
 python3 tools/breeding/breed.py generate --pair chiko:sia --count 3
 ```
 
+- Claude 클라우드 세션(scoo-camera 환경)에서는 키가 환경에 저장돼 있어서 네트워크 프록시가 자동으로 넣어 줘요. 이때는 `OPENAI_API_KEY=proxy-injected`처럼 아무 값이나 넣고 실행하면 돼요.
 - 기본값은 `gpt-image-2.6-flare` 모델, `low` 품질이에요(가장 저렴). `--model gpt-image-2.6-sunburst`, `--quality medium|high`로 바꿀 수 있어요. 토리 × 시아로 실제 생성을 확인했어요.
 - 조합마다 `-raw`(원본), `-baby`(정리), `-adult`(데이지) 세 장이 생겨요.
 - `--pair`를 빼면 이벤트를 뺀 24종의 552개 조합 전부예요. 비용이 크니 먼저 몇 조합으로 시험하세요.
