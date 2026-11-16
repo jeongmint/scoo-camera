@@ -2,7 +2,7 @@
 """스쿠카메라 교배 이미지 도구.
 
     python3 tools/breeding/breed.py prompts                     # prompts.md 다시 만들기 (프롬프트 + 부모 목록)
-    python3 tools/breeding/breed.py generate --model <모델 ID> [--pair chiko:sia] [--count 3]
+    python3 tools/breeding/breed.py generate [--pair chiko:sia] [--count 3] [--quality low]
                                                                 # 이미지 API로 아기 생성 + 성체(데이지) 버전 (OPENAI_API_KEY 필요)
     python3 tools/breeding/breed.py adult <아기 PNG> [--name chiko-sia] [--to-assets]
                                                                 # 교배를 마친 성체: 데이지 꽃 붙이기
@@ -151,6 +151,7 @@ def cmd_generate(args):
                     prompt=PROMPT,
                     background="transparent",
                     output_format="png",
+                    quality=args.quality,
                     size="1024x1024",
                 )
             raw.write_bytes(base64.b64decode(result.data[0].b64_json))
@@ -356,7 +357,8 @@ def main():
     p = sub.add_parser("prompts", help="prompts.md 다시 만들기")
     p.set_defaults(func=cmd_prompts)
     g = sub.add_parser("generate", help="이미지 API로 아기와 성체 생성 (OPENAI_API_KEY 필요)")
-    g.add_argument("--model", required=True, help="이미지 모델 ID (OpenAI 문서에서 정확한 ID 확인)")
+    g.add_argument("--model", default="gpt-image-2.6-flare", help="이미지 모델 ID (기본 gpt-image-2.6-flare)")
+    g.add_argument("--quality", default="low", choices=["low", "medium", "high", "auto"], help="생성 품질 (기본 low: 가장 저렴)")
     g.add_argument("--pair", action="append", help="a:b 형식(a가 부모 A), 여러 번 지정 가능. 없으면 전체 조합")
     g.add_argument("--count", type=int, default=1, help="조합마다 몇 장 만들지 (그림체 흔들림 비교용)")
     g.add_argument("--events", action="store_true", help="이벤트 친구(해피)도 포함")

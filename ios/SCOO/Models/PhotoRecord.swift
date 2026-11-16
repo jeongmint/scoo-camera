@@ -1,4 +1,23 @@
 import Foundation
+import ImageIO
+
+/// Where a photo was taken, for the map guestbook. Stored only on the device.
+struct PhotoLocation: Codable, Equatable {
+    var latitude: Double
+    var longitude: Double
+
+    /// GPS from an imported photo's metadata, if it has any.
+    static func fromImageData(_ data: Data) -> PhotoLocation? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let gps = properties[kCGImagePropertyGPSDictionary] as? [CFString: Any],
+              let latitude = gps[kCGImagePropertyGPSLatitude] as? Double,
+              let longitude = gps[kCGImagePropertyGPSLongitude] as? Double else { return nil }
+        let south = (gps[kCGImagePropertyGPSLatitudeRef] as? String) == "S"
+        let west = (gps[kCGImagePropertyGPSLongitudeRef] as? String) == "W"
+        return PhotoLocation(latitude: south ? -latitude : latitude, longitude: west ? -longitude : longitude)
+    }
+}
 
 struct PhotoRecord: Identifiable, Codable, Equatable {
     let id: UUID
@@ -10,6 +29,12 @@ struct PhotoRecord: Identifiable, Codable, Equatable {
     let experience: Int
     let bonus: Int
     let classificationNote: String
+    /// Added later; older records decode with nil.
+    var location: PhotoLocation? = nil
+    /// For video moments: the clip next to the poster JPEG in `filename`.
+    var videoFilename: String? = nil
+
+    var isVideo: Bool { videoFilename != nil }
 }
 
 struct GardenSnapshot: Codable {
@@ -25,6 +50,8 @@ struct ProcessedPhoto {
     let isFood: Bool
     let bonus: Int
     let classificationNote: String
+    /// Apple Vision scene labels seen in the photo (for 오늘의 미션).
+    var labels: [String] = []
 }
 
 enum SCOOError: LocalizedError {

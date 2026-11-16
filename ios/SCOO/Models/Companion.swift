@@ -2,8 +2,8 @@ import Foundation
 import CoreGraphics
 
 /// Friends that can be photographed together with the user ("같이 찍기").
-/// The picked friend stands in the viewfinder and is composited into the saved photo
-/// at the same spot, so what the user sees is what they get.
+/// The picked friend takes Mori's place as the floating shutter and is composited into the saved photo
+/// at the same spot and size, so what the user sees is what they get.
 enum Companion: String, CaseIterable, Codable, Identifiable {
     case gwiyo, kuru, mori, nyamo, happy
 
@@ -48,18 +48,20 @@ enum Companion: String, CaseIterable, Codable, Identifiable {
     static func owned(assigned: Companion) -> [Companion] {
         [assigned] + openEvents.filter { $0 != assigned }
     }
+}
 
-    // MARK: Where they stand
+/// Where the floating friend sits, independent of screen or photo size: its center as a fraction of the frame
+/// and its width as a fraction of the frame width. The friend's image is square.
+struct CompanionSpot: Equatable {
+    var center: CGPoint
+    var width: CGFloat
 
-    /// Center of the friend as a fraction of the frame (left of Mori's default spot, above the controls).
-    static let center = CGPoint(x: 0.21, y: 0.74)
-    /// Width of the friend as a fraction of the frame width. The image is square.
-    static let widthRatio: CGFloat = 0.30
+    /// Width used when the on-screen size is not known (imported photos).
+    static let defaultWidth: CGFloat = 0.24
 
-    /// Frame of the friend inside a canvas of the given size.
-    static func frame(in size: CGSize) -> CGRect {
-        let width = size.width * widthRatio
-        return CGRect(x: size.width * center.x - width / 2, y: size.height * center.y - width / 2,
-                      width: width, height: width)
+    /// The square the friend occupies inside a canvas of the given size.
+    func frame(in size: CGSize) -> CGRect {
+        let side = size.width * width
+        return CGRect(x: size.width * center.x - side / 2, y: size.height * center.y - side / 2, width: side, height: side)
     }
 }

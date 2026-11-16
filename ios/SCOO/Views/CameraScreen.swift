@@ -17,6 +17,12 @@ struct CameraScreen: View {
     @AppStorage("district") private var districtRaw = ""
     @StateObject private var locator = DistrictLocator()
     @AppStorage("companion") private var companionRaw = ""
+    /// Whether the floating friend is also drawn into the photo, or only floats on screen.
+    @AppStorage("companionInPhoto") private var companionInPhoto = true
+    /// Leave each photo's spot on the map guestbook.
+    @AppStorage("savePlace") private var savePlace = true
+    /// The day (yyyy-MM-dd) the daily mission was last completed.
+    @AppStorage("missionDoneDay") private var missionDoneDay = ""
     @State private var mode: CaptureMode = .auto
     @State private var flash = false
     @State private var processing = false
@@ -38,7 +44,7 @@ struct CameraScreen: View {
     @State private var lastReaction: MoriExpression?
 
     private enum CameraSheet: String, Identifiable {
-        case album, garden, settings
+        case album, garden, settings, map
         var id: String { rawValue }
     }
     private let look = FilmLook.eternal
@@ -63,7 +69,6 @@ struct CameraScreen: View {
                     RoundedRectangle(cornerRadius: 3).stroke(.yellow.opacity(0.9), lineWidth: 1)
                         .frame(width: 54, height: 54).position(focusPoint).allowsHitTesting(false)
                 }
-                companionView(size: size)
                 chrome(insets: insets)
                 floatingMori(size: size, insets: insets)
                 if shutterFlash { Color.white.opacity(0.8).allowsHitTesting(false) }
@@ -119,14 +124,18 @@ struct CameraScreen: View {
             guard !processing else { selectedItem = nil; return }
             processing = true
             closeEyes()
-            let capturedMode = mode, stamp = dateStamp, together = companion
+            let capturedMode = mode, stamp = dateStamp, together = companionInPhoto ? companion : nil
             Task {
                 do {
                     guard let data = try await item.loadTransferable(type: Data.self) else {
                         throw SCOOError.message("사진을 불러오지 못했어요.")
                     }
                     // Imported photos keep their original aspect ratio.
-                    await process(data, mode: capturedMode, stamp: stamp, aspect: nil, companion: together)
+                    // Imported photos keep their own size; use the saved floating spot at a standard size.
+                    let spot = CompanionSpot(center: CGPoint(x: savedMoriX, y: savedMoriY), width: CompanionSpot.defaultWidth)
+                    // Imported photos land on the map where they were taken, if they carry GPS.
+                    let place = savePlace ? PhotoLocation.fromImageData(data) : nil
+                    await process(data, mode: capturedMode, stamp: stamp, aspect: nil, companion: together, spot: spot, place: place)
                 } catch { processing = false; calmDown(); notify(error.localizedDescription) }
                 selectedItem = nil
             }
@@ -135,6 +144,7 @@ struct CameraScreen: View {
         .onChange(of: garden.message) { _, error in if let error { notify(error); garden.message = nil } }
         .onDisappear { camera.stop(); toastTask?.cancel(); focusTask?.cancel(); expressionTask?.cancel() }
         .onChange(of: assignedRaw) { _, _ in WidgetBridge.refresh() }
+        .onChange(of: companionRaw) { _, _ in WidgetBridge.refresh() }
         .sheet(item: $sheet, onDismiss: {
             if scenePhase == .active && !importing { camera.start() }
         }) { value in
@@ -142,6 +152,7 @@ struct CameraScreen: View {
             case .album: AlbumScreen().environmentObject(garden)
             case .garden: GardenScreen().environmentObject(garden)
             case .settings: SettingsScreen()
+            case .map: PlaceMapScreen().environmentObject(garden)
             }
         }
         .photosPicker(isPresented: $importing, selection: $selectedItem, matching: .images)
@@ -192,6 +203,7 @@ struct CameraScreen: View {
                         .padding(.horizontal, 10).padding(.vertical, 8)
                         .background(.black.opacity(0.25), in: Capsule())
                 }.disabled(blocked).accessibilityLabel("\(garden.snapshot.name) 성장 기록 열기")
+                missionChip
                 Spacer()
                 Menu {
                     ForEach([1.0, 1.2, 1.5, 2.0, 3.0], id: \.self) { value in
@@ -202,34 +214,45 @@ struct CameraScreen: View {
             }.padding(.horizontal, 22)
             Spacer(minLength: 0)
             if !moveHintSeen {
-                Text("모리를 눌러 찰칵 · 꾹 누르고 끌어서 이동")
+                Text("모리를 눌러 찰칵 · 아래로 쓸면 동영상 · 꾹 눌러 이동")
                     .font(.system(size: 10, weight: .medium)).padding(.bottom, 17)
                     .allowsHitTesting(false)
             }
             HStack {
                 Menu {
                     Button("앱 앨범", systemImage: "photo.on.rectangle") { sheet = .album }
+                    Button("지도 방명록", systemImage: "map") { sheet = .map }
                     Button("사진 불러오기", systemImage: "photo.badge.plus") { importing = true }
                 } label: { Image(systemName: "photo.on.rectangle").font(.system(size: 20)).frame(width: 48, height: 48) }
                     .disabled(blocked).accessibilityLabel("앨범과 사진 불러오기")
                 Spacer()
                 Menu {
                     ForEach(CaptureMode.allCases) { value in Button(value.title) { mode = value } }
-                    Section("같이 찍기") {
-                        Picker("같이 찍기", selection: $companionRaw) {
-                            Text("혼자 찍기").tag("")
+                    Section("떠 있는 친구") {
+                        Picker("떠 있는 친구", selection: $companionRaw) {
+                            Text("기본 모리").tag("")
                             ForEach(ownedCompanions) { friend in Text(friend.menuTitle).tag(friend.rawValue) }
+                        }
+                    }
+                    if companion != nil {
+                        Section {
+                            Toggle("사진에 같이 찍기", isOn: $companionInPhoto)
+                        } footer: {
+                            Text(companionInPhoto ? "떠 있는 자리 그대로 사진에 함께 담겨요." : "화면에만 떠 있고 사진에는 안 찍혀요.")
                         }
                     }
                 } label: {
                     HStack(spacing: 5) {
                         Text(companion.map { "\(mode.title) · \($0.title)" } ?? mode.title)
+                        if companion != nil && companionInPhoto {
+                            Image(systemName: "camera.fill").font(.system(size: 8))
+                        }
                         Image(systemName: "chevron.down").font(.system(size: 8))
                     }
                         .font(.system(size: 11, weight: .medium)).padding(.horizontal, 15).frame(height: 38)
                         .background(.black.opacity(0.25), in: Capsule())
                 }.disabled(blocked)
-                    .accessibilityLabel("촬영 모드, \(mode.title), \(companion.map { "\($0.title)와 같이 찍기" } ?? "혼자 찍기")")
+                    .accessibilityLabel("촬영 모드, \(mode.title), \(companion.map { "\($0.title), " + (companionInPhoto ? "사진에 같이 찍기" : "화면에만") } ?? "기본 모리")")
                 Spacer()
                 Button { camera.flip() } label: {
                     Image(systemName: "arrow.triangle.2.circlepath.camera").font(.system(size: 21)).frame(width: 48, height: 48)
@@ -242,6 +265,26 @@ struct CameraScreen: View {
         .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
     }
 
+    /// A small chip with today's mission; it turns into a check once done.
+    private var missionChip: some View {
+        let mission = DailyMission.of(Date())
+        let done = missionDoneDay == DailyMission.dayKey(Date())
+        return Button {
+            notify(done ? "오늘의 미션 완료! 내일 또 새 미션이 와요."
+                        : "오늘의 미션은 ‘\(mission.title)’! 찍으면 +\(DailyMission.bonus) EXP를 더 받아요.")
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: done ? "checkmark.circle.fill" : mission.systemImage)
+                Text(done ? "미션 완료" : mission.title)
+            }
+            .font(.system(size: 10, weight: .medium))
+            .padding(.horizontal, 10).padding(.vertical, 8)
+            .background(.black.opacity(0.25), in: Capsule())
+        }
+        .disabled(blocked)
+        .accessibilityLabel(done ? "오늘의 미션 완료" : "오늘의 미션, \(mission.title)")
+    }
+
     private func placement(_ candidate: MoriPlacement, size: CGSize, insets: EdgeInsets) -> CGPoint {
         let bounds = candidate.clamped(width: Double(size.width), height: Double(size.height),
                                        top: Double(insets.top + 80), bottom: Double(insets.bottom + 90),
@@ -249,27 +292,13 @@ struct CameraScreen: View {
         return CGPoint(x: CGFloat(bounds.x) * size.width, y: CGFloat(bounds.y) * size.height)
     }
 
-    /// The friend standing in the viewfinder. It is composited into the photo at the same spot (see `Companion.frame`).
-    @ViewBuilder
-    private func companionView(size: CGSize) -> some View {
-        if let companion {
-            let frame = Companion.frame(in: size)
-            Image(companion.assetName).resizable().scaledToFit()
-                .frame(width: frame.width, height: frame.height)
-                .shadow(color: .black.opacity(0.28), radius: frame.width * 0.07, y: frame.width * 0.05)
-                // a little hop when the photo gets a reaction
-                .offset(y: expression == .normal || expression == .shutter ? 0 : -frame.width * 0.04)
-                .animation(.spring(response: 0.3, dampingFraction: 0.55), value: expression)
-                .position(x: frame.midX, y: frame.midY)
-                .allowsHitTesting(false)
-                .accessibilityLabel("\(companion.title)와 같이 찍는 중")
-        }
-    }
-
     private func floatingMori(size: CGSize, insets: EdgeInsets) -> some View {
         let resting = placement(MoriPlacement(x: savedMoriX, y: savedMoriY), size: size, insets: insets)
         let current = dragPoint ?? resting
         let viewportAspect = size.width / max(1, size.height)
+        // The picked friend is drawn into the photo exactly where and as big as it floats.
+        let spot = CompanionSpot(center: CGPoint(x: resting.x / max(1, size.width), y: resting.y / max(1, size.height)),
+                                 width: moriSize / max(1, size.width))
         let slop: CGFloat = 18
         // One gesture decides everything: short press = shutter, hold then drag = move.
         let press = DragGesture(minimumDistance: 0, coordinateSpace: .named("cameraViewport"))
@@ -295,16 +324,40 @@ struct CameraScreen: View {
                     moveHintSeen = true
                     UISelectionFeedbackGenerator().selectionChanged()
                 } else if hypot(value.translation.width, value.translation.height) <= slop {
-                    takePhoto(aspect: viewportAspect)
+                    // a tap: take a photo, or stop the video that is running
+                    if camera.isRecording { camera.stopRecording() } else { takePhoto(aspect: viewportAspect, spot: spot) }
+                } else if abs(value.translation.height) > abs(value.translation.width) {
+                    // a quick vertical swipe: down starts a video, up stops it
+                    if value.translation.height > 50, !camera.isRecording { startVideo() }
+                    else if value.translation.height < -50, camera.isRecording { camera.stopRecording() }
                 }
                 moving = false
                 dragPoint = nil
             }
         return ZStack {
-            MarimoView(size: moriSize, happy: processing || camera.isCapturing,
-                       expression: expression == .normal ? nil : expression, floats: !moving)
-                .shadow(color: .black.opacity(0.35), radius: 9, y: 7)
+            Group {
+                if let companion {
+                    FloatingFriend(assetName: companion.assetName, size: moriSize, expression: expression, floats: !moving)
+                } else {
+                    MarimoView(size: moriSize, happy: processing || camera.isCapturing,
+                               expression: expression == .normal ? nil : expression, floats: !moving)
+                }
+            }
+            .shadow(color: .black.opacity(0.35), radius: 9, y: 7)
             if processing || camera.isCapturing { ProgressView().tint(.white).scaleEffect(0.75) }
+            if camera.isRecording, let started = camera.recordingStarted {
+                Circle().stroke(.red.opacity(0.9), lineWidth: 3).frame(width: moriSize + 10, height: moriSize + 10)
+                    .allowsHitTesting(false)
+                HStack(spacing: 4) {
+                    Circle().fill(.red).frame(width: 6, height: 6)
+                    Text(timerInterval: started...started.addingTimeInterval(ClipWriter.maxSeconds), countsDown: false)
+                        .monospacedDigit()
+                }
+                .font(.system(size: 10, weight: .semibold))
+                .padding(.horizontal, 10).padding(.vertical, 5)
+                .background(.black.opacity(0.55), in: Capsule()).foregroundStyle(.white)
+                .offset(y: -moriSize / 2 - 16).allowsHitTesting(false)
+            }
             if moving {
                 Text("여기에 둘까?").font(.system(size: 9, weight: .medium))
                     .padding(.horizontal, 10).padding(.vertical, 6)
@@ -318,11 +371,14 @@ struct CameraScreen: View {
         .animation(.spring(response: 0.25, dampingFraction: 0.7), value: moving)
         .gesture(press)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(garden.snapshot.name), 사진 촬영")
+        .accessibilityLabel("\(companion?.title ?? garden.snapshot.name), 사진 촬영")
         .accessibilityValue("레벨 \(garden.growth.level)")
         .accessibilityHint("두 번 탭하면 촬영합니다. 화면에서 꾹 누르고 끌면 이동합니다.")
         .accessibilityAddTraits(.isButton)
-        .accessibilityAction { takePhoto(aspect: viewportAspect) }
+        .accessibilityAction { takePhoto(aspect: viewportAspect, spot: spot) }
+        .accessibilityAction(named: camera.isRecording ? "동영상 멈추기" : "동영상 찍기") {
+            if camera.isRecording { camera.stopRecording() } else { startVideo() }
+        }
         .accessibilityAction(named: "중앙 아래로 이동") {
             savedMoriX = MoriPlacement.initial.x
             savedMoriY = MoriPlacement.initial.y
@@ -330,7 +386,7 @@ struct CameraScreen: View {
         .position(current)
     }
 
-    private func takePhoto(aspect: CGFloat) {
+    private func takePhoto(aspect: CGFloat, spot: CompanionSpot) {
         guard canCapture else {
             if !camera.isRunning { notify("카메라를 켜면 모리를 눌러 촬영할 수 있어요.") }
             else if !garden.ready { notify("모리가 아직 준비 중이에요. 잠시 후 다시 눌러 주세요.") }
@@ -338,11 +394,16 @@ struct CameraScreen: View {
         }
         processing = true
         closeEyes()
-        let capturedMode = mode, stamp = dateStamp, together = companion
+        let capturedMode = mode, stamp = dateStamp, together = companionInPhoto ? companion : nil
+        // Look up where we are while the shutter works, so the photo does not wait for GPS.
+        let placeLookup: Task<PhotoLocation?, Never>? = savePlace ? Task { await locator.quickLocation() } : nil
         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
         camera.capture(flash: flash) { result in
             switch result {
-            case .success(let data): Task { await process(data, mode: capturedMode, stamp: stamp, aspect: aspect, companion: together) }
+            case .success(let data): Task {
+                let place = await placeLookup?.value
+                await process(data, mode: capturedMode, stamp: stamp, aspect: aspect, companion: together, spot: spot, place: place)
+            }
             case .failure(let error): processing = false; calmDown(); notify(error.localizedDescription)
             }
         }
@@ -364,6 +425,50 @@ struct CameraScreen: View {
             districtRaw = ""
             assignedRaw = friend.rawValue
             notify("새 친구 도착! \(friend.title) · \(failure.reason) 이번엔 랜덤으로 왔어요.")
+        }
+    }
+
+    // MARK: Video
+
+    /// Swipe down on the floating friend: a short silent video with the Eternal look, up to 15 seconds.
+    private func startVideo() {
+        guard canCapture else {
+            if !camera.isRunning { notify("카메라를 켜면 아래로 쓸어서 동영상을 찍을 수 있어요.") }
+            return
+        }
+        let capturedMode = mode
+        let placeLookup: Task<PhotoLocation?, Never>? = savePlace ? Task { await locator.quickLocation() } : nil
+        UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+        camera.startRecording { result in
+            switch result {
+            case .success(let clip):
+                Task {
+                    let place = await placeLookup?.value
+                    await keepClip(clip, mode: capturedMode, place: place)
+                }
+            case .failure(let error):
+                notify(error.localizedDescription)
+            }
+        }
+    }
+
+    private func keepClip(_ clip: ClipWriter.Clip, mode: CaptureMode, place: PhotoLocation?) async {
+        processing = true
+        defer { processing = false }
+        let moment = ProcessedPhoto(jpeg: clip.poster, isFood: false, bonus: 0,
+                                    classificationNote: "동영상 \(max(1, Int(clip.seconds.rounded())))초")
+        do {
+            let gain = try await garden.add(moment, filter: look, mode: mode, location: place, video: clip.url)
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            react(.smile)
+            notify("움직이는 순간도 냠! · +\(gain) EXP")
+            if autoSave, let stored = garden.snapshot.photos.first, let url = garden.videoURL(for: stored) {
+                do { try await PhotoLibraryWriter.saveVideo(url) }
+                catch { notify("앱에는 저장했어요. \(error.localizedDescription)") }
+            }
+        } catch {
+            try? FileManager.default.removeItem(at: clip.url)
+            notify("동영상을 저장하지 못했어요. \(error.localizedDescription)")
         }
     }
 
@@ -406,20 +511,28 @@ struct CameraScreen: View {
         }
     }
 
-    private func process(_ data: Data, mode: CaptureMode, stamp: Bool, aspect: CGFloat?, companion: Companion?) async {
+    private func process(_ data: Data, mode: CaptureMode, stamp: Bool, aspect: CGFloat?, companion: Companion?, spot: CompanionSpot,
+                         place: PhotoLocation?) async {
         defer { processing = false }
         do {
             let oldLevel = garden.growth.level
-            let result = try await pipeline.process(data: data, look: look, mode: mode, dateStamp: stamp, aspectRatio: aspect, companion: companion)
-            let gain = try await garden.add(result, filter: look, mode: mode)
+            let result = try await pipeline.process(data: data, look: look, mode: mode, dateStamp: stamp, aspectRatio: aspect, companion: companion, spot: spot)
+            let mission = DailyMission.of(Date())
+            let missionHit = missionDoneDay != DailyMission.dayKey(Date()) && mission.matches(result.labels)
+            let gain = try await garden.add(result, filter: look, mode: mode, location: place, extra: missionHit ? DailyMission.bonus : 0)
+            if missionHit { missionDoneDay = DailyMission.dayKey(Date()) }
             react(MoriExpression.reaction(isFood: result.isFood, bonus: result.bonus, leveledUp: garden.growth.level > oldLevel,
                                           previous: lastReaction, roll: .random(in: 0..<1)))
             withAnimation(.easeOut(duration: 0.12)) { shutterFlash = true }
             Task { try? await Task.sleep(for: .milliseconds(160)); withAnimation { shutterFlash = false } }
             UINotificationFeedbackGenerator().notificationOccurred(.success)
+            if missionHit {
+                notify("오늘의 미션 성공! \(mission.title) 찰칵 · +\(gain) EXP (미션 +\(DailyMission.bonus))")
+            } else {
             notify(garden.growth.level > oldLevel
                    ? "\(garden.snapshot.name), LV.\(garden.growth.level)! 또 자랐어 🌱"
                    : "\(companion.map { "\($0.title)랑 같이 찰칵! " } ?? "")\(result.isFood ? "냠냠, 든든한 한 끼" : "이 순간 마음에 들어") · +\(gain) EXP")
+            }
             if autoSave {
                 do { try await PhotoLibraryWriter.save(result.jpeg) }
                 catch { notify("앱에는 저장했어요. \(error.localizedDescription)") }
@@ -442,4 +555,29 @@ private struct CameraPreview: UIViewRepresentable {
     let renderer: PreviewRenderer
     func makeUIView(context: Context) -> MTKView { renderer.makeView() }
     func updateUIView(_ view: MTKView, context: Context) { }
+}
+
+/// A picked friend floating in Mori's place. PNG friends have no drawn faces, so they react with their body:
+/// a small squish while the photo is taken and a hop when it reacts.
+private struct FloatingFriend: View {
+    let assetName: String
+    let size: CGFloat
+    let expression: MoriExpression
+    var floats = true
+    @State private var floating = false
+
+    private var reacting: Bool { expression != .normal && expression != .shutter }
+
+    var body: some View {
+        Image(assetName).resizable().scaledToFit()
+            .frame(width: size, height: size)
+            .scaleEffect(x: expression == .shutter ? 1.05 : 1, y: expression == .shutter ? 0.93 : 1, anchor: .bottom)
+            .scaleEffect(reacting ? 1.08 : 1)
+            .offset(y: reacting ? -size * 0.08 : 0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.55), value: expression)
+            .offset(y: floats ? (floating ? -4 : 3) : 0)
+            .rotationEffect(.degrees(floats ? (floating ? 2 : -2) : 0))
+            .animation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true), value: floating)
+            .onAppear { floating = true }
+    }
 }

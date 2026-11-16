@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 import PhotosUI
 import ImageIO
+import AVKit
 
 struct AlbumScreen: View {
     @EnvironmentObject private var garden: GardenStore
@@ -19,6 +20,11 @@ struct AlbumScreen: View {
                             Button { selected = photo } label: {
                                 VStack(spacing: 10) {
                                     PhotoThumbnail(url: garden.fileURL(for: photo)).aspectRatio(3 / 4, contentMode: .fit).clipped()
+                                        .overlay(alignment: .topTrailing) {
+                                            if photo.isVideo {
+                                                Image(systemName: "play.circle.fill").font(.title3).foregroundStyle(.white).shadow(radius: 3).padding(8)
+                                            }
+                                        }
                                     HStack { Text(photo.date, format: .dateTime.year(.twoDigits).month(.twoDigits).day(.twoDigits)); Spacer(); Text("+\(photo.experience)").foregroundStyle(Palette.moss) }.font(.system(size: 9, design: .monospaced))
                                 }.padding(9).background(.white.opacity(0.7)).foregroundStyle(Palette.ink)
                             }.buttonStyle(.plain).accessibilityLabel("\(photo.filter) 사진, \(photo.experience) EXP")
@@ -54,9 +60,10 @@ struct PhotoThumbnail: View {
     }
 }
 
-private struct PhotoDetail: View {
+struct PhotoDetail: View {
     let photo: PhotoRecord
     @EnvironmentObject private var garden: GardenStore
+    @AppStorage("keepsakePhotoID") private var keepsakeID = ""
     @Environment(\.dismiss) private var dismiss
     @State private var image: UIImage?
     @State private var confirmingDelete = false
@@ -66,19 +73,34 @@ private struct PhotoDetail: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    if let image { Image(uiImage: image).resizable().scaledToFit().clipShape(RoundedRectangle(cornerRadius: 8)) }
+                    if let video = garden.videoURL(for: photo) {
+                        VideoPlayer(player: AVPlayer(url: video)).aspectRatio(3 / 4, contentMode: .fit).clipShape(RoundedRectangle(cornerRadius: 8))
+                    } else if let image { Image(uiImage: image).resizable().scaledToFit().clipShape(RoundedRectangle(cornerRadius: 8)) }
                     HStack { Text(photo.filter).font(.title2.weight(.medium)); Spacer(); Text("+\(photo.experience) EXP").font(.caption.monospaced()).foregroundStyle(Palette.sage) }
                     Text(photo.date, format: .dateTime.year().month().day().hour().minute()).font(.caption).foregroundStyle(.secondary)
                     Text(photo.classificationNote).font(.caption).foregroundStyle(.secondary)
                     Text("빛·선명도 보너스 +\(photo.bonus)").font(.caption).foregroundStyle(Palette.moss)
+                    if photo.location != nil { Label("지도 방명록에 남은 순간", systemImage: "mappin.and.ellipse").font(.caption).foregroundStyle(.secondary) }
                     Button {
                         saving = true
                         Task {
                             defer { saving = false }
-                            do { let data = try Data(contentsOf: garden.fileURL(for: photo)); try await PhotoLibraryWriter.save(data); message = "사진 앱에 저장했어요." }
+                            do {
+                                if let video = garden.videoURL(for: photo) { try await PhotoLibraryWriter.saveVideo(video) }
+                                else { let data = try Data(contentsOf: garden.fileURL(for: photo)); try await PhotoLibraryWriter.save(data) }
+                                message = "사진 앱에 저장했어요."
+                            }
                             catch { message = error.localizedDescription }
                         }
                     } label: { Label(saving ? "저장 중…" : "사진 앱에 저장", systemImage: "square.and.arrow.down").frame(maxWidth: .infinity).padding(14) }.buttonStyle(.borderedProminent).disabled(saving)
+                    Button {
+                        keepsakeID = keepsakeID == photo.id.uuidString ? "" : photo.id.uuidString
+                    } label: {
+                        Label(keepsakeID == photo.id.uuidString ? "애착 사진에서 빼기" : "애착 사진으로 정하기",
+                              systemImage: keepsakeID == photo.id.uuidString ? "heart.slash" : "heart")
+                            .frame(maxWidth: .infinity).padding(12)
+                    }
+                    .buttonStyle(.bordered)
                     Button("앱 앨범에서 삭제", role: .destructive) { confirmingDelete = true }.font(.caption).padding(.top, 10)
                 }.padding(22)
             }.background(Palette.cream).navigationTitle("작은 순간").navigationBarTitleDisplayMode(.inline)

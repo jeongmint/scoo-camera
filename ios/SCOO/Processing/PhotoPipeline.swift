@@ -7,7 +7,7 @@ actor PhotoPipeline {
     private let context = CIContext(options: [.cacheIntermediates: false])
 
     func process(data: Data, look: FilmLook, mode: CaptureMode, dateStamp: Bool, aspectRatio: CGFloat? = nil,
-                 companion: Companion? = nil) throws -> ProcessedPhoto {
+                 companion: Companion? = nil, spot: CompanionSpot? = nil) throws -> ProcessedPhoto {
         guard let uiImage = UIImage(data: data) else { throw SCOOError.message("사진을 열 수 없어요.") }
         // UIKit normalizes all EXIF orientations before cropping or Vision analysis.
         let size = uiImage.size
@@ -35,7 +35,7 @@ actor PhotoPipeline {
         let classification = classify(analysisImage, mode: mode)
         let bonus = quality(analysisImage)
         var filmInput = cropped
-        if let companion, let together = place(companion, on: analysisImage) {
+        if let companion, let spot, let together = place(companion, at: spot, on: analysisImage) {
             filmInput = CIImage(cgImage: together)
         }
         let result = look.apply(to: filmInput, finishing: true)
@@ -56,15 +56,15 @@ actor PhotoPipeline {
             }
         }
         guard let jpeg = image.jpegData(compressionQuality: 0.92) else { throw SCOOError.message("JPEG를 만들지 못했어요.") }
-        return ProcessedPhoto(jpeg: jpeg, isFood: classification.0, bonus: bonus, classificationNote: classification.1)
+        return ProcessedPhoto(jpeg: jpeg, isFood: classification.0, bonus: bonus, classificationNote: classification.1, labels: classification.2)
     }
 
     /// Draws the friend into the frame at the same spot the viewfinder showed it. Returns nil if the image is missing.
-    private func place(_ companion: Companion, on base: CGImage) -> CGImage? {
+    private func place(_ companion: Companion, at spot: CompanionSpot, on base: CGImage) -> CGImage? {
         guard let sticker = UIImage(named: companion.assetName) else { return nil }
         let size = CGSize(width: base.width, height: base.height)
         let format = UIGraphicsImageRendererFormat(); format.scale = 1; format.opaque = true
-        let frame = Companion.frame(in: size)
+        let frame = spot.frame(in: size)
         return UIGraphicsImageRenderer(size: size, format: format).image { context in
             UIImage(cgImage: base).draw(in: CGRect(origin: .zero, size: size))
             // Same soft drop shadow as on screen, scaled to the photo.
@@ -74,12 +74,22 @@ actor PhotoPipeline {
         }.cgImage
     }
 
-    private func classify(_ image: CGImage, mode: CaptureMode) -> (Bool, String) {
-        if mode == .food { return (true, "음식 모드를 직접 선택했어요.") }
-        if mode == .daily { return (false, "일상 모드를 직접 선택했어요.") }
+    /// (is food, note, scene labels). Labels are read in every mode for 오늘의 미션; the mode only overrides the food guess.
+    private func classify(_ image: CGImage, mode: CaptureMode) -> (Bool, String, [String]) {
+        let request = VNClassifyImageRequest()
+        let labels: [String]
+        var failed = false
         do {
-            let request = VNClassifyImageRequest()
             try VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
+            labels = (request.results ?? []).prefix(30).filter { $0.confidence >= 0.2 }.map(\.identifier)
+        } catch {
+            labels = []
+            failed = true
+        }
+        if mode == .food { return (true, "음식 모드를 직접 선택했어요.", labels) }
+        if mode == .daily { return (false, "일상 모드를 직접 선택했어요.", labels) }
+        if failed { return (false, "자동 분류를 사용할 수 없어 일상으로 기록했어요.", labels) }
+        do {
             let foodTerms: Set<String> = ["food", "food_and_drink", "food_and_beverage", "meal", "dish", "cuisine", "dessert", "pizza", "pasta", "bread", "cake", "cookie", "sushi", "salad", "soup", "sandwich", "fruit", "vegetable", "coffee", "tea", "beverage", "ice_cream", "chocolate", "pastry", "noodle", "rice", "steak", "hamburger", "seafood"]
             let match = request.results?.prefix(25).first { result in
                 let identifier = result.identifier.lowercased().replacingOccurrences(of: " ", with: "_")
@@ -87,10 +97,8 @@ actor PhotoPipeline {
                     identifier == term || identifier.hasPrefix(term + "_") || identifier.hasSuffix("_" + term)
                 })
             }
-            if let match { return (true, "음식 추정 · \(match.identifier) \(Int(match.confidence * 100))%") }
-            return (false, "일상으로 분류했어요. 음식이면 촬영 전 음식 모드를 골라 주세요.")
-        } catch {
-            return (false, "자동 분류를 사용할 수 없어 일상으로 기록했어요.")
+            if let match { return (true, "음식 추정 · \(match.identifier) \(Int(match.confidence * 100))%", labels) }
+            return (false, "일상으로 분류했어요. 음식이면 촬영 전 음식 모드를 골라 주세요.", labels)
         }
     }
 
@@ -116,6 +124,18 @@ enum PhotoLibraryWriter {
         try await PHPhotoLibrary.shared().performChanges {
             let request = PHAssetCreationRequest.forAsset()
             request.addResource(with: .photo, data: data, options: nil)
+        }
+    }
+
+    static func saveVideo(_ url: URL) async throws {
+        let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+        guard status == .authorized || status == .limited else {
+            throw SCOOError.message("사진 앱 저장 권한이 꺼져 있어요. 설정 > SCOO > 사진에서 허용해 주세요. 앱 안의 영상은 그대로 보관돼요.")
+        }
+        try await PHPhotoLibrary.shared().performChanges {
+            let options = PHAssetResourceCreationOptions()
+            options.shouldMoveFile = false
+            PHAssetCreationRequest.forAsset().addResource(with: .video, fileURL: url, options: options)
         }
     }
 }

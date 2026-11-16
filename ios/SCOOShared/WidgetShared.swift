@@ -12,7 +12,7 @@ enum WidgetShared {
     static var defaults: UserDefaults? { UserDefaults(suiteName: appGroup) }
     static var container: URL? { FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup) }
 
-    /// Small PNGs the app renders for the widget ("mori", "friend", "baby").
+    /// Small PNGs the app renders for the widget ("hero" = the floating character, "friend", "baby").
     static func imageURL(_ name: String) -> URL? { container?.appendingPathComponent("widget-\(name).png") }
 }
 
