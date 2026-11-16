@@ -180,7 +180,7 @@ struct BreedScreen: View {
                             VStack(spacing: 4) {
                                 BreedPortrait(breed: baby, adult: adult).frame(height: 84)
                                 Text(baby.title).font(.system(size: 10, weight: .medium)).lineLimit(1).minimumScaleFactor(0.7)
-                                Text(adult ? "성체" : "아기 · 사진 \(baby.photosLeft(moments: moments))장 더")
+                                Text((baby.origin.map { "\($0) 출신 · " } ?? "") + (adult ? "성체" : "아기 · 사진 \(baby.photosLeft(moments: moments))장 더"))
                                     .font(.system(size: 9)).foregroundStyle(.secondary)
                             }
                             .padding(8)
@@ -286,7 +286,11 @@ private struct BreedDetail: View {
                         parent(breed.mother, role: "부모 A · 몸과 표정")
                         parent(breed.father, role: "부모 B · 색과 특징")
                     }
-                    Text("태어난 날 \(breed.born.formatted(date: .long, time: .omitted))").font(.caption).foregroundStyle(.secondary)
+                    Text((breed.adopted == true ? "우리 집에 온 날 " : "태어난 날 ") + breed.born.formatted(date: .long, time: .omitted))
+                        .font(.caption).foregroundStyle(.secondary)
+                    if let origin = breed.origin {
+                        Label("\(origin) 출신 · 유리병을 타고 왔어요", systemImage: "water.waves").font(.caption).foregroundStyle(.secondary)
+                    }
                     if !drawn {
                         Text("아직 이 조합의 그림이 없어서 부모 A 모양에 부모 B 색을 입힌 임시 그림을 보여줘요. 그림을 만들어 Breed-\(breed.key)로 넣으면 바로 바뀌어요.")
                             .font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center)

@@ -159,14 +159,9 @@ struct GardenScreen: View {
                         Spacer(); stat("지금의 크기", String(format: "%.1f cm", garden.growth.size))
                         Spacer(); stat("기분", "몽글몽글")
                     }
-                    NavigationLink { BreedScreen() } label: {
-                        HStack {
-                            Label("교배하러 가기", systemImage: "heart.circle").font(.subheadline.weight(.medium))
-                            Spacer()
-                            Image(systemName: "chevron.right").font(.caption)
-                        }
-                        .padding(.horizontal, 20).padding(.vertical, 16)
-                        .background(.white.opacity(0.65), in: RoundedRectangle(cornerRadius: 16))
+                    VStack(spacing: 10) {
+                        NavigationLink { BreedScreen() } label: { menuRow("교배하러 가기", systemImage: "heart.circle") }
+                        NavigationLink { BottleScreen() } label: { menuRow("유리병 입양", systemImage: "water.waves") }
                     }
                     .buttonStyle(.plain)
                     VStack(alignment: .leading, spacing: 10) {
@@ -185,6 +180,16 @@ struct GardenScreen: View {
                 }
         }.tint(Palette.moss)
     }
+    private func menuRow(_ title: String, systemImage: String) -> some View {
+        HStack {
+            Label(title, systemImage: systemImage).font(.subheadline.weight(.medium))
+            Spacer()
+            Image(systemName: "chevron.right").font(.caption)
+        }
+        .padding(.horizontal, 20).padding(.vertical, 16)
+        .background(.white.opacity(0.65), in: RoundedRectangle(cornerRadius: 16))
+    }
+
     private func stat(_ title: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 9) { Text(title).font(.caption2).foregroundStyle(.secondary); Text(value).font(.subheadline.weight(.medium)) }
     }

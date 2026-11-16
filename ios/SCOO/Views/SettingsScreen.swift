@@ -9,6 +9,7 @@ struct SettingsScreen: View {
     @AppStorage("district") private var districtRaw = ""
     @AppStorage("unlockAllFriends") private var unlockAll = false
     @AppStorage("savePlace") private var savePlace = true
+    @AppStorage("bottleFastMode") private var bottleFast = false
     @StateObject private var locator = DistrictLocator()
     @State private var finding = false
     @State private var note: String?
@@ -31,6 +32,7 @@ struct SettingsScreen: View {
                     }
                     Button("랜덤으로 다시 받기") { receiveRandom() }
                     Toggle("모든 친구 열기 (교배 테스트)", isOn: $unlockAll)
+                    Toggle("유리병 빠르게 (1분 배송 테스트)", isOn: $bottleFast)
                     if let note { Text(note).font(.footnote) }
                 } header: { Text("동네 친구 (테스트)") } footer: {
                     Text("서울 25개 구마다 잘 만나는 친구가 달라요. 구의 친구가 70%, 나머지는 다른 친구예요. 새로 받아도 사진과 성장 기록은 그대로예요. ‘모든 친구 열기’를 켜면 교배 화면에서 25종을 모두 고를 수 있어요.")

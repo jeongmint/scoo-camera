@@ -9,6 +9,10 @@ struct Breed: Identifiable, Codable, Equatable {
     let born: Date
     /// The garden's photo count when it hatched; photos after this make it grow.
     let bornAtMoment: Int
+    /// Where it came from, for babies that arrived in a glass bottle (e.g. "마포구"). Older records decode with nil.
+    var origin: String? = nil
+    /// True for babies taken in from a glass bottle.
+    var adopted: Bool? = nil
 
     var key: String { "\(parentA)-\(parentB)" }
     /// Drawn baby, made with tools/breeding (`cutout --to-assets`).

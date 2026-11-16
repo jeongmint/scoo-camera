@@ -21,11 +21,25 @@ final class BreedStore: ObservableObject {
     @discardableResult
     func hatch(a: String, b: String, moments: Int, now: Date = Date()) throws -> Breed {
         let baby = Breed(id: UUID(), parentA: a, parentB: b, born: now, bornAtMoment: moments)
-        let next = [baby] + breeds
+        try write([baby] + breeds)
+        return baby
+    }
+
+    /// A baby leaves in a glass bottle.
+    func remove(_ id: UUID) throws {
+        try write(breeds.filter { $0.id != id })
+    }
+
+    /// A baby arrives from a glass bottle.
+    func adopt(_ baby: Breed) throws {
+        guard !breeds.contains(where: { $0.id == baby.id }) else { return }
+        try write([baby] + breeds)
+    }
+
+    private func write(_ next: [Breed]) throws {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try JSONEncoder().encode(next).write(to: url, options: .atomic)
         breeds = next
         WidgetBridge.refresh()
-        return baby
     }
 }
