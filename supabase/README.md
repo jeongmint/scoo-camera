@@ -36,3 +36,15 @@
 - 로그인한 계정만 부를 수 있고, 계정마다 하루 새 그림 20장까지예요(`BREED_DAILY_LIMIT`로 조절).
 - **OpenAI 키는 대시보드 → Edge Functions → Secrets에 `OPENAI_API_KEY`로 넣어요.** 앱이나 저장소에는 넣지 않아요.
 - 모델·품질은 `BREED_IMAGE_MODEL`, `BREED_IMAGE_QUALITY` 비밀값으로 바꿀 수 있어요.
+
+## 친구와 편지 (`20261116000300_friends_and_messages`)
+
+| 이름 | 하는 일 |
+| --- | --- |
+| `profiles.friend_code`, `profiles.hero` | 6자리 친구 코드(헷갈리는 0/O/1/I/L 제외), 친구에게 보일 캐릭터 |
+| `friendships` | 요청한 쪽·받은 쪽·수락 여부. 서로 요청하면 바로 친구 |
+| `messages` | 친구끼리만, 글(500자)이나 캐릭터 스티커. 분당 30통 제한 |
+| `my_profile()`, `request_friend(code)`, `respond_friend(id, accept)` | 내 코드, 친구 요청, 수락·거절 |
+| `send_message(to, body, sticker)`, `mark_read(friend)`, `list_friends()`, `my_messages` | 편지 보내기, 읽음, 친구 목록(마지막 편지·안 읽은 수), 대화 |
+
+`tests/friends_scenario.sql`로 로컬에서 요청·수락·편지·읽음·다른 사람 차단을 확인했어요.

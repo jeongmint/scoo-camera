@@ -35,6 +35,14 @@ actor SupabaseClient {
                 return "서버 키가 아직 설정되지 않았어요."
             case .http(_, let body) where body.contains("daily limit reached"):
                 return "유리병은 하루에 한 번 띄울 수 있어요."
+            case .http(_, let body) where body.contains("no such code"):
+                return "그 코드를 가진 친구를 찾지 못했어요."
+            case .http(_, let body) where body.contains("your own code"):
+                return "내 친구 코드예요. 친구의 코드를 넣어 주세요."
+            case .http(_, let body) where body.contains("not friends"):
+                return "친구가 된 뒤에 편지를 보낼 수 있어요."
+            case .http(_, let body) where body.contains("slow down"):
+                return "편지를 너무 빨리 보내고 있어요. 잠시 뒤에 보내 주세요."
             case .http(429, _):
                 return "오늘은 새 그림을 충분히 그렸어요. 내일 또 그려 줄게요."
             case .http(_, let body) where body.lowercased().contains("anonymous sign-ins are disabled"):
@@ -82,6 +90,11 @@ actor SupabaseClient {
     func select<T: Decodable>(_ pathAndQuery: String, as type: T.Type) async throws -> T {
         let data = try await call("rest/v1/\(pathAndQuery)", method: "GET", body: nil)
         return try Self.decoder.decode(T.self, from: data)
+    }
+
+    /// Updates rows (`PATCH /rest/v1/<pathAndQuery>`); row level security decides which rows.
+    func update(_ pathAndQuery: String, _ body: [String: Any]) async throws {
+        _ = try await call("rest/v1/\(pathAndQuery)", method: "PATCH", body: body)
     }
 
     /// Calls an Edge Function (`/functions/v1/<name>`) as the signed-in user.

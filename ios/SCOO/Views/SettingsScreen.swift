@@ -13,6 +13,8 @@ struct SettingsScreen: View {
     @AppStorage("bottleOnline") private var bottleOnline = true
     @State private var accountID: String?
     @State private var connecting = false
+    @State private var nickname = ""
+    @StateObject private var social = SocialStore()
     @StateObject private var locator = DistrictLocator()
     @State private var finding = false
     @State private var note: String?
@@ -47,13 +49,31 @@ struct SettingsScreen: View {
                             Button(connecting ? "연결 중…" : "서버에 연결하기") { Task { await connect() } }.disabled(connecting)
                         }
                         Toggle("유리병을 진짜 사람들과 주고받기", isOn: $bottleOnline)
+                        if accountID != nil {
+                            HStack {
+                                TextField(social.profile?.nickname ?? "친구에게 보일 이름", text: $nickname)
+                                Button("저장") {
+                                    Task {
+                                        do { try await social.setNickname(nickname); nickname = ""; note = "이름을 바꿨어요." }
+                                        catch { note = error.localizedDescription }
+                                    }
+                                }
+                                .disabled(nickname.trimmingCharacters(in: .whitespaces).isEmpty)
+                            }
+                            if let code = social.profile?.friend_code {
+                                LabeledContent("내 친구 코드", value: code)
+                            }
+                        }
                     } else {
                         Text("서버 키가 아직 없어서 유리병은 이 기기 안에서만 시험해요.").font(.footnote)
                     }
                 } header: { Text("계정 · 서버") } footer: {
                     Text("로그인 없이 익명 계정으로 시작해요. 계정 정보는 이 iPhone의 키체인에 보관돼요. 끄면 유리병은 기기 안의 가짜 바다로 돌아가요.")
                 }
-                .task { accountID = await SupabaseClient.shared.currentUserID }
+                .task {
+                    accountID = await SupabaseClient.shared.currentUserID
+                    if accountID != nil { await social.refresh() }
+                }
                 Section("Eternal") {
                     Text("차가운 회색 그림자와 따뜻한 빛, 짙은 검정과 작은 디지털 입자. 필터는 Eternal 하나만 사용해요.").font(.footnote)
                 }

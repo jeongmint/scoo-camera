@@ -211,6 +211,7 @@ struct GardenScreen: View {
                     VStack(spacing: 10) {
                         NavigationLink { BreedScreen() } label: { menuRow("교배하러 가기", systemImage: "heart.circle") }
                         NavigationLink { BottleScreen() } label: { menuRow("유리병 입양", systemImage: "water.waves") }
+                        NavigationLink { InboxScreen() } label: { menuRow("편지함 · 친구", systemImage: "envelope") }
                         Button { toggleWalk() } label: {
                             menuRow(walking ? "산책 모드 끝내기" : "산책 모드 시작 (잠금 화면에 함께)", systemImage: walking ? "figure.walk.departure" : "figure.walk")
                         }
