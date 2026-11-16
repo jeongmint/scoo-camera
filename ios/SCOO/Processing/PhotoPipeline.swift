@@ -56,7 +56,7 @@ actor PhotoPipeline {
             }
         }
         guard let jpeg = image.jpegData(compressionQuality: 0.92) else { throw SCOOError.message("JPEG를 만들지 못했어요.") }
-        return ProcessedPhoto(jpeg: jpeg, isFood: classification.0, bonus: bonus, classificationNote: classification.1)
+        return ProcessedPhoto(jpeg: jpeg, isFood: classification.0, bonus: bonus, classificationNote: classification.1, labels: classification.2)
     }
 
     /// Draws the friend into the frame at the same spot the viewfinder showed it. Returns nil if the image is missing.
@@ -74,12 +74,22 @@ actor PhotoPipeline {
         }.cgImage
     }
 
-    private func classify(_ image: CGImage, mode: CaptureMode) -> (Bool, String) {
-        if mode == .food { return (true, "음식 모드를 직접 선택했어요.") }
-        if mode == .daily { return (false, "일상 모드를 직접 선택했어요.") }
+    /// (is food, note, scene labels). Labels are read in every mode for 오늘의 미션; the mode only overrides the food guess.
+    private func classify(_ image: CGImage, mode: CaptureMode) -> (Bool, String, [String]) {
+        let request = VNClassifyImageRequest()
+        let labels: [String]
+        var failed = false
         do {
-            let request = VNClassifyImageRequest()
             try VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
+            labels = (request.results ?? []).prefix(30).filter { $0.confidence >= 0.2 }.map(\.identifier)
+        } catch {
+            labels = []
+            failed = true
+        }
+        if mode == .food { return (true, "음식 모드를 직접 선택했어요.", labels) }
+        if mode == .daily { return (false, "일상 모드를 직접 선택했어요.", labels) }
+        if failed { return (false, "자동 분류를 사용할 수 없어 일상으로 기록했어요.", labels) }
+        do {
             let foodTerms: Set<String> = ["food", "food_and_drink", "food_and_beverage", "meal", "dish", "cuisine", "dessert", "pizza", "pasta", "bread", "cake", "cookie", "sushi", "salad", "soup", "sandwich", "fruit", "vegetable", "coffee", "tea", "beverage", "ice_cream", "chocolate", "pastry", "noodle", "rice", "steak", "hamburger", "seafood"]
             let match = request.results?.prefix(25).first { result in
                 let identifier = result.identifier.lowercased().replacingOccurrences(of: " ", with: "_")
@@ -87,10 +97,8 @@ actor PhotoPipeline {
                     identifier == term || identifier.hasPrefix(term + "_") || identifier.hasSuffix("_" + term)
                 })
             }
-            if let match { return (true, "음식 추정 · \(match.identifier) \(Int(match.confidence * 100))%") }
-            return (false, "일상으로 분류했어요. 음식이면 촬영 전 음식 모드를 골라 주세요.")
-        } catch {
-            return (false, "자동 분류를 사용할 수 없어 일상으로 기록했어요.")
+            if let match { return (true, "음식 추정 · \(match.identifier) \(Int(match.confidence * 100))%", labels) }
+            return (false, "일상으로 분류했어요. 음식이면 촬영 전 음식 모드를 골라 주세요.", labels)
         }
     }
 

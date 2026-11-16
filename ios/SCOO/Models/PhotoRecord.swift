@@ -46,6 +46,8 @@ struct ProcessedPhoto {
     let isFood: Bool
     let bonus: Int
     let classificationNote: String
+    /// Apple Vision scene labels seen in the photo (for 오늘의 미션).
+    var labels: [String] = []
 }
 
 enum SCOOError: LocalizedError {

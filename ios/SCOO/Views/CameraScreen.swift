@@ -21,6 +21,8 @@ struct CameraScreen: View {
     @AppStorage("companionInPhoto") private var companionInPhoto = true
     /// Leave each photo's spot on the map guestbook.
     @AppStorage("savePlace") private var savePlace = true
+    /// The day (yyyy-MM-dd) the daily mission was last completed.
+    @AppStorage("missionDoneDay") private var missionDoneDay = ""
     @State private var mode: CaptureMode = .auto
     @State private var flash = false
     @State private var processing = false
@@ -201,6 +203,7 @@ struct CameraScreen: View {
                         .padding(.horizontal, 10).padding(.vertical, 8)
                         .background(.black.opacity(0.25), in: Capsule())
                 }.disabled(blocked).accessibilityLabel("\(garden.snapshot.name) 성장 기록 열기")
+                missionChip
                 Spacer()
                 Menu {
                     ForEach([1.0, 1.5, 2.0, 3.0], id: \.self) { value in
@@ -260,6 +263,26 @@ struct CameraScreen: View {
         .padding(.bottom, max(insets.bottom, 12) + 6)
         .foregroundStyle(.white)
         .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
+    }
+
+    /// A small chip with today's mission; it turns into a check once done.
+    private var missionChip: some View {
+        let mission = DailyMission.of(Date())
+        let done = missionDoneDay == DailyMission.dayKey(Date())
+        return Button {
+            notify(done ? "오늘의 미션 완료! 내일 또 새 미션이 와요."
+                        : "오늘의 미션은 ‘\(mission.title)’! 찍으면 +\(DailyMission.bonus) EXP를 더 받아요.")
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: done ? "checkmark.circle.fill" : mission.systemImage)
+                Text(done ? "미션 완료" : mission.title)
+            }
+            .font(.system(size: 10, weight: .medium))
+            .padding(.horizontal, 10).padding(.vertical, 8)
+            .background(.black.opacity(0.25), in: Capsule())
+        }
+        .disabled(blocked)
+        .accessibilityLabel(done ? "오늘의 미션 완료" : "오늘의 미션, \(mission.title)")
     }
 
     private func placement(_ candidate: MoriPlacement, size: CGSize, insets: EdgeInsets) -> CGPoint {
@@ -429,15 +452,22 @@ struct CameraScreen: View {
         do {
             let oldLevel = garden.growth.level
             let result = try await pipeline.process(data: data, look: look, mode: mode, dateStamp: stamp, aspectRatio: aspect, companion: companion, spot: spot)
-            let gain = try await garden.add(result, filter: look, mode: mode, location: place)
+            let mission = DailyMission.of(Date())
+            let missionHit = missionDoneDay != DailyMission.dayKey(Date()) && mission.matches(result.labels)
+            let gain = try await garden.add(result, filter: look, mode: mode, location: place, extra: missionHit ? DailyMission.bonus : 0)
+            if missionHit { missionDoneDay = DailyMission.dayKey(Date()) }
             react(MoriExpression.reaction(isFood: result.isFood, bonus: result.bonus, leveledUp: garden.growth.level > oldLevel,
                                           previous: lastReaction, roll: .random(in: 0..<1)))
             withAnimation(.easeOut(duration: 0.12)) { shutterFlash = true }
             Task { try? await Task.sleep(for: .milliseconds(160)); withAnimation { shutterFlash = false } }
             UINotificationFeedbackGenerator().notificationOccurred(.success)
+            if missionHit {
+                notify("오늘의 미션 성공! \(mission.title) 찰칵 · +\(gain) EXP (미션 +\(DailyMission.bonus))")
+            } else {
             notify(garden.growth.level > oldLevel
                    ? "\(garden.snapshot.name), LV.\(garden.growth.level)! 또 자랐어 🌱"
                    : "\(companion.map { "\($0.title)랑 같이 찰칵! " } ?? "")\(result.isFood ? "냠냠, 든든한 한 끼" : "이 순간 마음에 들어") · +\(gain) EXP")
+            }
             if autoSave {
                 do { try await PhotoLibraryWriter.save(result.jpeg) }
                 catch { notify("앱에는 저장했어요. \(error.localizedDescription)") }

@@ -27,11 +27,12 @@ actor PhotoRepository {
         snapshot = next
     }
 
-    func add(_ processed: ProcessedPhoto, filter: FilmLook, mode: CaptureMode, location: PhotoLocation? = nil) throws -> GardenSnapshot {
+    /// `extra` is bonus EXP on top of the usual reward (e.g. 오늘의 미션).
+    func add(_ processed: ProcessedPhoto, filter: FilmLook, mode: CaptureMode, location: PhotoLocation? = nil, extra: Int = 0) throws -> GardenSnapshot {
         var next = try load()
         let id = UUID()
         let filename = "\(id.uuidString).jpg"
-        let gain = GrowthRules.reward(isFood: processed.isFood, bonus: processed.bonus)
+        let gain = GrowthRules.reward(isFood: processed.isFood, bonus: processed.bonus) + max(0, extra)
         let photo = PhotoRecord(id: id, date: Date(), filename: filename, filter: filter.rawValue,
                                 isFood: processed.isFood, mode: mode, experience: gain,
                                 bonus: processed.bonus, classificationNote: processed.classificationNote, location: location)
@@ -80,9 +81,9 @@ final class GardenStore: ObservableObject {
     }
 
     @discardableResult
-    func add(_ photo: ProcessedPhoto, filter: FilmLook, mode: CaptureMode, location: PhotoLocation? = nil) async throws -> Int {
+    func add(_ photo: ProcessedPhoto, filter: FilmLook, mode: CaptureMode, location: PhotoLocation? = nil, extra: Int = 0) async throws -> Int {
         let previous = snapshot.experience
-        snapshot = try await repository.add(photo, filter: filter, mode: mode, location: location)
+        snapshot = try await repository.add(photo, filter: filter, mode: mode, location: location, extra: extra)
         WidgetBridge.publish(snapshot)
         return snapshot.experience - previous
     }
