@@ -134,6 +134,7 @@ struct CameraScreen: View {
         .onChange(of: camera.errorMessage) { _, error in if let error { notify(error) } }
         .onChange(of: garden.message) { _, error in if let error { notify(error); garden.message = nil } }
         .onDisappear { camera.stop(); toastTask?.cancel(); focusTask?.cancel(); expressionTask?.cancel() }
+        .onChange(of: assignedRaw) { _, _ in WidgetBridge.refresh() }
         .sheet(item: $sheet, onDismiss: {
             if scenePhase == .active && !importing { camera.start() }
         }) { value in

@@ -25,6 +25,7 @@ final class BreedStore: ObservableObject {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try JSONEncoder().encode(next).write(to: url, options: .atomic)
         breeds = next
+        WidgetBridge.refresh()
         return baby
     }
 }

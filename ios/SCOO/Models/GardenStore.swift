@@ -75,7 +75,7 @@ final class GardenStore: ObservableObject {
     var day: Int { max(1, Calendar.current.dateComponents([.day], from: snapshot.birthday, to: Date()).day.map { $0 + 1 } ?? 1) }
 
     func load() async {
-        do { snapshot = try await repository.load(); ready = true }
+        do { snapshot = try await repository.load(); ready = true; WidgetBridge.publish(snapshot) }
         catch { message = "기록을 읽지 못했어요. 기존 데이터는 보존했어요. \(error.localizedDescription)" }
     }
 
@@ -83,16 +83,17 @@ final class GardenStore: ObservableObject {
     func add(_ photo: ProcessedPhoto, filter: FilmLook, mode: CaptureMode) async throws -> Int {
         let previous = snapshot.experience
         snapshot = try await repository.add(photo, filter: filter, mode: mode)
+        WidgetBridge.publish(snapshot)
         return snapshot.experience - previous
     }
 
     func rename(_ name: String) async {
-        do { snapshot = try await repository.rename(name) }
+        do { snapshot = try await repository.rename(name); WidgetBridge.publish(snapshot) }
         catch { message = error.localizedDescription }
     }
 
     func delete(_ photo: PhotoRecord) async {
-        do { snapshot = try await repository.delete(photo) }
+        do { snapshot = try await repository.delete(photo); WidgetBridge.publish(snapshot) }
         catch { message = error.localizedDescription }
     }
 
