@@ -29,3 +29,10 @@
 ## 실제 서버 확인
 
 `tests/live_bottle_check.py`는 실제 프로젝트에 익명 계정 두 개를 만들어 유리병 보내기 → 교환 → 직접 쓰기·비로그인 거부 → 1분 뒤 열기 → 두 번 열기 거부를 확인해요(테스터 1분 배송이라 1분쯤 걸려요). 끝나면 출력된 두 계정 id를 SQL Editor에서 `delete from auth.users where id in (...)`로 지우세요. 2026-11-16 실행 결과 모두 통과했고 시험 계정은 지웠어요.
+
+## 교배 그림 (`functions/breed-image`)
+
+- 앱이 부모 A·B 그림(512px PNG)을 보내면 OpenAI 이미지 편집 API(`gpt-image-2.6-flare`, `low`, 투명 배경)로 아기를 그려 공개 버킷 `breeds/<A>-<B>.png`에 저장하고 주소를 돌려줘요. 이미 그린 조합은 바로 돌려줘요(비용 없음).
+- 로그인한 계정만 부를 수 있고, 계정마다 하루 새 그림 20장까지예요(`BREED_DAILY_LIMIT`로 조절).
+- **OpenAI 키는 대시보드 → Edge Functions → Secrets에 `OPENAI_API_KEY`로 넣어요.** 앱이나 저장소에는 넣지 않아요.
+- 모델·품질은 `BREED_IMAGE_MODEL`, `BREED_IMAGE_QUALITY` 비밀값으로 바꿀 수 있어요.

@@ -16,6 +16,11 @@ struct BreedPortrait: View {
             DaisyFrame(image: baby, key: breed.babyAsset, spot: breed.mother?.daisy ?? DaisySpot(), adult: adult) {
                 Image(uiImage: baby).resizable().scaledToFit()
             }
+        } else if let drawn = BreedArt.image(breed.key) {
+            // drawn by the server when the egg hatched
+            DaisyFrame(image: drawn, key: "art-\(breed.key)", spot: breed.mother?.daisy ?? DaisySpot(), adult: adult) {
+                Image(uiImage: drawn).resizable().scaledToFit()
+            }
         } else if let mother = breed.mother, let shape = UIImage(named: mother.assetName) {
             DaisyFrame(image: shape, key: mother.assetName, spot: mother.daisy, adult: adult) {
                 StandInBaby(shape: shape, color: breed.father.flatMap { BodyColor.of($0.assetName) } ?? .white)

@@ -214,7 +214,7 @@ struct CameraScreen: View {
             }.padding(.horizontal, 22)
             Spacer(minLength: 0)
             if !moveHintSeen {
-                Text("모리를 눌러 찰칵 · 위로 쓸면 동영상 · 꾹 눌러 이동")
+                Text("모리를 눌러 찰칵 · 아래로 쓸면 동영상 · 꾹 눌러 이동")
                     .font(.system(size: 10, weight: .medium)).padding(.bottom, 17)
                     .allowsHitTesting(false)
             }
@@ -327,9 +327,9 @@ struct CameraScreen: View {
                     // a tap: take a photo, or stop the video that is running
                     if camera.isRecording { camera.stopRecording() } else { takePhoto(aspect: viewportAspect, spot: spot) }
                 } else if abs(value.translation.height) > abs(value.translation.width) {
-                    // a quick vertical swipe: up starts a video, down stops it
-                    if value.translation.height < -50, !camera.isRecording { startVideo() }
-                    else if value.translation.height > 50, camera.isRecording { camera.stopRecording() }
+                    // a quick vertical swipe: down starts a video, up stops it
+                    if value.translation.height > 50, !camera.isRecording { startVideo() }
+                    else if value.translation.height < -50, camera.isRecording { camera.stopRecording() }
                 }
                 moving = false
                 dragPoint = nil
@@ -430,10 +430,10 @@ struct CameraScreen: View {
 
     // MARK: Video
 
-    /// Swipe up on the floating friend: a short silent video with the Eternal look, up to 15 seconds.
+    /// Swipe down on the floating friend: a short silent video with the Eternal look, up to 15 seconds.
     private func startVideo() {
         guard canCapture else {
-            if !camera.isRunning { notify("카메라를 켜면 위로 쓸어서 동영상을 찍을 수 있어요.") }
+            if !camera.isRunning { notify("카메라를 켜면 아래로 쓸어서 동영상을 찍을 수 있어요.") }
             return
         }
         let capturedMode = mode

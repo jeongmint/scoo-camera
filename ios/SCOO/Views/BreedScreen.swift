@@ -202,6 +202,8 @@ private struct HatchView: View {
     let done: () -> Void
     @State private var wobble = false
     @State private var cracked = false
+    @State private var drawingLong = false
+    @State private var drawNote: String?
 
     var body: some View {
         ZStack {
@@ -212,6 +214,7 @@ private struct HatchView: View {
                         .transition(.scale(scale: 0.4).combined(with: .opacity))
                     Text("태어났어요!").font(.title2.weight(.semibold))
                     Text(breed.title).font(.subheadline).foregroundStyle(.secondary)
+                    if let drawNote { Text(drawNote).font(.caption2).foregroundStyle(.secondary) }
                     Text("사진을 \(BreedRules.photosToGrow)장 더 찍으면 데이지를 단 성체로 자라요.")
                         .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
                     Button("반가워!") { done() }
@@ -222,7 +225,7 @@ private struct HatchView: View {
                         .frame(width: 150, height: 190)
                         .rotationEffect(.degrees(wobble ? 9 : -9), anchor: .bottom)
                         .animation(.easeInOut(duration: 0.16).repeatForever(autoreverses: true), value: wobble)
-                    Text("두근두근…").font(.subheadline).foregroundStyle(.secondary)
+                    Text(drawingLong ? "두근두근… 아기 모습을 그리는 중이에요" : "두근두근…").font(.subheadline).foregroundStyle(.secondary)
                 }
             }
             .padding(30)
@@ -230,9 +233,32 @@ private struct HatchView: View {
         }
         .task {
             wobble = true
+            // Draw the baby on the server while the egg wobbles (pairs drawn before come back at once).
+            async let drawing: String? = draw()
             try? await Task.sleep(for: .seconds(2.2))
+            drawingLong = true
+            drawNote = await drawing
             UINotificationFeedbackGenerator().notificationOccurred(.success)
             withAnimation(.spring(response: 0.45, dampingFraction: 0.6)) { cracked = true }
+        }
+    }
+}
+
+extension HatchView {
+    /// Returns a note when the picture could not be drawn (the stand-in is shown instead).
+    @MainActor
+    func draw() async -> String? {
+        guard BreedArt.canDraw, !BreedArt.hasArt(breed) else { return nil }
+        do {
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                group.addTask { try await BreedArt.fetch(breed) }
+                group.addTask { try await Task.sleep(for: .seconds(90)); throw SCOOError.message("그림이 오래 걸려서 다음에 다시 그려 볼게요.") }
+                _ = try await group.next()
+                group.cancelAll()
+            }
+            return nil
+        } catch {
+            return "지금은 임시 그림이에요. \(error.localizedDescription)"
         }
     }
 }
@@ -264,10 +290,23 @@ private struct BreedDetail: View {
     let breed: Breed
     let moments: Int
     @Environment(\.dismiss) private var dismiss
+    @State private var drawing = false
+    @State private var redrawn = false
+    @State private var drawError: String?
+
+    private func redraw() {
+        drawing = true
+        drawError = nil
+        Task {
+            defer { drawing = false }
+            do { try await BreedArt.fetch(breed); redrawn = true }
+            catch { drawError = error.localizedDescription }
+        }
+    }
 
     var body: some View {
         let adult = breed.isAdult(moments: moments)
-        let drawn = UIImage(named: breed.babyAsset) != nil
+        let drawn = BreedArt.hasArt(breed)
         NavigationStack {
             ScrollView {
                 VStack(spacing: 18) {
@@ -291,9 +330,14 @@ private struct BreedDetail: View {
                     if let origin = breed.origin {
                         Label("\(origin) 출신 · 유리병을 타고 왔어요", systemImage: "water.waves").font(.caption).foregroundStyle(.secondary)
                     }
-                    if !drawn {
-                        Text("아직 이 조합의 그림이 없어서 부모 A 모양에 부모 B 색을 입힌 임시 그림을 보여줘요. 그림을 만들어 Breed-\(breed.key)로 넣으면 바로 바뀌어요.")
+                    if !drawn && !redrawn {
+                        Text("아직 이 조합의 그림이 없어서 부모 A 모양에 부모 B 색을 입힌 임시 그림을 보여줘요.")
                             .font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                        if BreedArt.canDraw {
+                            Button(drawing ? "그리는 중…" : "진짜 모습 그려 받기") { redraw() }
+                                .disabled(drawing).buttonStyle(.borderedProminent)
+                        }
+                        if let drawError { Text(drawError).font(.caption2).foregroundStyle(.secondary) }
                     }
                 }
                 .padding(24)

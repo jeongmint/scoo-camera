@@ -35,6 +35,8 @@ actor SupabaseClient {
                 return "서버 키가 아직 설정되지 않았어요."
             case .http(_, let body) where body.contains("daily limit reached"):
                 return "유리병은 하루에 한 번 띄울 수 있어요."
+            case .http(429, _):
+                return "오늘은 새 그림을 충분히 그렸어요. 내일 또 그려 줄게요."
             case .http(_, let body) where body.lowercased().contains("anonymous sign-ins are disabled"):
                 return "서버에서 익명 로그인이 꺼져 있어요. Supabase 설정에서 켜 주세요."
             case .http(let code, _):
@@ -80,6 +82,11 @@ actor SupabaseClient {
     func select<T: Decodable>(_ pathAndQuery: String, as type: T.Type) async throws -> T {
         let data = try await call("rest/v1/\(pathAndQuery)", method: "GET", body: nil)
         return try Self.decoder.decode(T.self, from: data)
+    }
+
+    /// Calls an Edge Function (`/functions/v1/<name>`) as the signed-in user.
+    func invoke(_ name: String, _ body: [String: Any]) async throws -> Data {
+        try await call("functions/v1/\(name)", method: "POST", body: body)
     }
 
     // MARK: Plumbing
