@@ -132,6 +132,25 @@ struct GardenScreen: View {
     @State private var renaming = false
     @State private var name = ""
     @State private var line = "오늘은 어떤 순간을 먹을까?"
+    @State private var film: RenderedFilm?
+    @AppStorage("keepsakePhotoID") private var keepsakeID = ""
+    @AppStorage("assignedCompanion") private var assignedRaw = ""
+    @AppStorage("companion") private var companionRaw = ""
+
+    private struct RenderedFilm: Identifiable {
+        let id = UUID()
+        let image: UIImage
+    }
+
+    private var personality: Personality { Personality.of(garden.snapshot.photos) }
+    private var todayPhotos: [PhotoRecord] { garden.snapshot.photos.filter { Calendar.current.isDateInToday($0.date) } }
+    /// The friend floating in the camera, if one was picked (otherwise Mori).
+    private var floatingFriend: Companion? {
+        guard let picked = Companion(rawValue: companionRaw), let assigned = Companion(rawValue: assignedRaw),
+              Companion.owned(assigned: assigned).contains(picked) else { return nil }
+        return picked
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -157,8 +176,35 @@ struct GardenScreen: View {
                     HStack {
                         stat("먹은 순간", "\(garden.snapshot.moments) 컷")
                         Spacer(); stat("지금의 크기", String(format: "%.1f cm", garden.growth.size))
-                        Spacer(); stat("기분", "몽글몽글")
+                        Spacer(); stat("성격", personality.title)
                     }
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label(personality.title, systemImage: "sparkles").font(.subheadline.weight(.medium))
+                        Text(personality.habit).font(.caption).foregroundStyle(.secondary)
+                        Text("자주 찍는 사진에 따라 성격이 조금씩 달라져요.").font(.caption2).foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(20).background(.white.opacity(0.55), in: RoundedRectangle(cornerRadius: 16))
+                    if let keepsake = Keepsake.photo(in: garden.snapshot.photos, chosen: keepsakeID) {
+                        HStack(spacing: 14) {
+                            PhotoThumbnail(url: garden.fileURL(for: keepsake))
+                                .frame(width: 72, height: 72).clipShape(RoundedRectangle(cornerRadius: 10))
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("\(garden.snapshot.name)의 애착 사진").font(.subheadline.weight(.medium))
+                                Text(keepsake.date.formatted(date: .long, time: .omitted)).font(.caption).foregroundStyle(.secondary)
+                                Text(keepsake.id.uuidString == keepsakeID ? "네가 골라 준 사진이에요." : "제일 반짝이던 순간을 골라 간직하고 있어요. 앨범에서 바꿀 수 있어요.")
+                                    .font(.caption2).foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(16).background(.white.opacity(0.55), in: RoundedRectangle(cornerRadius: 16))
+                    }
+                    Button { makeFilm() } label: {
+                        menuRow(todayPhotos.isEmpty ? "오늘 찍은 사진이 생기면 필름을 만들어요" : "오늘의 작은 필름 만들기 (\(min(4, todayPhotos.count))장)",
+                                systemImage: "film")
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(todayPhotos.isEmpty)
                     VStack(spacing: 10) {
                         NavigationLink { BreedScreen() } label: { menuRow("교배하러 가기", systemImage: "heart.circle") }
                         NavigationLink { BottleScreen() } label: { menuRow("유리병 입양", systemImage: "water.waves") }
@@ -173,6 +219,7 @@ struct GardenScreen: View {
             }.background(Palette.cream).foregroundStyle(Palette.ink)
                 .navigationTitle("작은 친구").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("닫기") { dismiss() } } }
+                .sheet(item: $film) { film in FilmStripSheet(image: film.image) }
                 .alert("마리모 이름", isPresented: $renaming) {
                     TextField("이름 (최대 12자)", text: $name)
                     Button("저장") { Task { await garden.rename(name) } }
@@ -180,6 +227,19 @@ struct GardenScreen: View {
                 }
         }.tint(Palette.moss)
     }
+    private func makeFilm() {
+        let records = todayPhotos
+        let images = FilmStrip.images(for: records, url: garden.fileURL(for:))
+        guard !images.isEmpty else { return }
+        let friend = floatingFriend
+        let strip = FilmStrip(photos: images, date: Date(),
+                              caption: FilmStrip.caption(friend: friend?.title ?? garden.snapshot.name, photos: Array(records.prefix(4))),
+                              friendAsset: friend?.assetName)
+        let renderer = ImageRenderer(content: strip)
+        renderer.scale = 2
+        if let image = renderer.uiImage { film = RenderedFilm(image: image) }
+    }
+
     private func menuRow(_ title: String, systemImage: String) -> some View {
         HStack {
             Label(title, systemImage: systemImage).font(.subheadline.weight(.medium))

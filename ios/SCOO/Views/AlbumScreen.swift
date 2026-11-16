@@ -57,6 +57,7 @@ struct PhotoThumbnail: View {
 struct PhotoDetail: View {
     let photo: PhotoRecord
     @EnvironmentObject private var garden: GardenStore
+    @AppStorage("keepsakePhotoID") private var keepsakeID = ""
     @Environment(\.dismiss) private var dismiss
     @State private var image: UIImage?
     @State private var confirmingDelete = false
@@ -80,6 +81,14 @@ struct PhotoDetail: View {
                             catch { message = error.localizedDescription }
                         }
                     } label: { Label(saving ? "저장 중…" : "사진 앱에 저장", systemImage: "square.and.arrow.down").frame(maxWidth: .infinity).padding(14) }.buttonStyle(.borderedProminent).disabled(saving)
+                    Button {
+                        keepsakeID = keepsakeID == photo.id.uuidString ? "" : photo.id.uuidString
+                    } label: {
+                        Label(keepsakeID == photo.id.uuidString ? "애착 사진에서 빼기" : "애착 사진으로 정하기",
+                              systemImage: keepsakeID == photo.id.uuidString ? "heart.slash" : "heart")
+                            .frame(maxWidth: .infinity).padding(12)
+                    }
+                    .buttonStyle(.bordered)
                     Button("앱 앨범에서 삭제", role: .destructive) { confirmingDelete = true }.font(.caption).padding(.top, 10)
                 }.padding(22)
             }.background(Palette.cream).navigationTitle("작은 순간").navigationBarTitleDisplayMode(.inline)
