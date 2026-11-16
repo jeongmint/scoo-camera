@@ -92,6 +92,9 @@ final class BottleTests: XCTestCase {
         XCTAssertNotNil(SupabaseClient.parseTimestamp("2026-11-16T04:36:22.921163+00:00"))
         XCTAssertNotNil(SupabaseClient.parseTimestamp("2026-11-16T04:36:22+00:00"))
         XCTAssertNotNil(SupabaseClient.parseTimestamp("2026-11-16T04:36:22.9Z"))
+        // exactly what the server sent in the live test
+        let live = SupabaseClient.parseTimestamp("2026-11-16T04:59:13.08426+00:00")
+        XCTAssertEqual(live?.timeIntervalSince1970 ?? 0, 1_794_805_153.084, accuracy: 0.001)
         XCTAssertNil(SupabaseClient.parseTimestamp("어제"))
     }
 

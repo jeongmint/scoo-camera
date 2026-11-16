@@ -8,7 +8,7 @@
 2. **SQL Editor**에 `migrations/20261116000000_accounts_and_bottles.sql`을 붙여 넣고 실행해요.
 3. **publishable 키**(`sb_publishable_…`)는 이미 `scripts/generate_xcodeproj.py`의 `SUPABASE_ANON_KEY`에 들어 있어요. 앱에 들어가도 되는 공개 키예요. **secret / service_role 키는 절대 앱이나 저장소에 넣지 마세요.**
 
-마이그레이션 두 개(`accounts_and_bottles`, `lock_handle_new_user`)는 2026-11-16에 프로젝트에 적용했어요. 1번(익명 로그인 켜기)은 대시보드에서만 할 수 있어요.
+마이그레이션 두 개(`accounts_and_bottles`, `lock_handle_new_user`)는 2026-11-16에 프로젝트에 적용했고, 익명 로그인도 켜져 있어요. 1번은 대시보드에서만 바꿀 수 있어요.
 
 ## 들어 있는 것
 
@@ -25,3 +25,7 @@
 ## 로컬에서 확인
 
 `tests/`에는 Supabase의 `auth` 스키마를 흉내 낸 준비 SQL과 교환 시나리오가 있어요. PostgreSQL 16에서 `local_supabase_stubs.sql` → 마이그레이션 → `bottles_scenario.sql` 순서로 실행하면 교환, 하루 제한, 권한 거부를 확인할 수 있어요.
+
+## 실제 서버 확인
+
+`tests/live_bottle_check.py`는 실제 프로젝트에 익명 계정 두 개를 만들어 유리병 보내기 → 교환 → 직접 쓰기·비로그인 거부 → 1분 뒤 열기 → 두 번 열기 거부를 확인해요(테스터 1분 배송이라 1분쯤 걸려요). 끝나면 출력된 두 계정 id를 SQL Editor에서 `delete from auth.users where id in (...)`로 지우세요. 2026-11-16 실행 결과 모두 통과했고 시험 계정은 지웠어요.

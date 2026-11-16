@@ -145,12 +145,20 @@ actor SupabaseClient {
     }()
 
     static func parseTimestamp(_ text: String) -> Date? {
+        // Postgres sends 0–6 fractional digits (e.g. ".08426"); normalise them to milliseconds first.
+        var value = text
+        if let dot = value.firstIndex(of: ".") {
+            let start = value.index(after: dot)
+            let end = value[start...].firstIndex(where: { !$0.isNumber }) ?? value.endIndex
+            let millis = String((String(value[start..<end]) + "000").prefix(3))
+            value = String(value[..<start]) + millis + String(value[end...])
+        }
         let fractional = ISO8601DateFormatter()
         fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = fractional.date(from: text) { return date }
+        if let date = fractional.date(from: value) { return date }
         let plain = ISO8601DateFormatter()
         plain.formatOptions = [.withInternetDateTime]
-        return plain.date(from: text)
+        return plain.date(from: value)
     }
 }
 
