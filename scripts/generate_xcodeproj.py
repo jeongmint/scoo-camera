@@ -83,7 +83,7 @@ app_common = {
     'SUPPORTED_PLATFORMS': 'iphoneos iphonesimulator', 'SUPPORTS_MACCATALYST': 'NO', 'TARGETED_DEVICE_FAMILY': '1',
     'SWIFT_EMIT_LOC_STRINGS': 'YES', 'CODE_SIGN_ENTITLEMENTS': 'SCOO/Resources/SCOO.entitlements',
     # Supabase publishable (anon) key: public by design, protected by row level security. Never a secret key.
-    'SUPABASE_ANON_KEY': '',
+    'SUPABASE_ANON_KEY': 'sb_publishable_Jmnq2XZohnNY0VnR0X8geQ_LAYusEtr',
 }
 # Home screen and lock screen widget. Shares the app group in SCOOShared/WidgetShared.swift.
 widget_common = {

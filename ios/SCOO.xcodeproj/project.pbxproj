@@ -706,7 +706,7 @@
 				"TARGETED_DEVICE_FAMILY" = "1";
 				"SWIFT_EMIT_LOC_STRINGS" = "YES";
 				"CODE_SIGN_ENTITLEMENTS" = "SCOO/Resources/SCOO.entitlements";
-				"SUPABASE_ANON_KEY" = "";
+				"SUPABASE_ANON_KEY" = "sb_publishable_Jmnq2XZohnNY0VnR0X8geQ_LAYusEtr";
 				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
 				"DEBUG_INFORMATION_FORMAT" = "dwarf";
 				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG $(inherited)";
@@ -731,7 +731,7 @@
 				"TARGETED_DEVICE_FAMILY" = "1";
 				"SWIFT_EMIT_LOC_STRINGS" = "YES";
 				"CODE_SIGN_ENTITLEMENTS" = "SCOO/Resources/SCOO.entitlements";
-				"SUPABASE_ANON_KEY" = "";
+				"SUPABASE_ANON_KEY" = "sb_publishable_Jmnq2XZohnNY0VnR0X8geQ_LAYusEtr";
 				"SWIFT_OPTIMIZATION_LEVEL" = "-O";
 				"DEBUG_INFORMATION_FORMAT" = "dwarf-with-dsym";
 			};

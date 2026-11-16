@@ -6,7 +6,9 @@
 
 1. **Authentication → Sign In / Providers → Anonymous sign-ins**를 켜요. 앱은 로그인 화면 없이 익명 계정으로 시작해요.
 2. **SQL Editor**에 `migrations/20261116000000_accounts_and_bottles.sql`을 붙여 넣고 실행해요.
-3. **Project Settings → API Keys**의 **publishable(anon) 키**를 앱 설정에 넣어요(`scripts/generate_xcodeproj.py`의 `SUPABASE_ANON_KEY`). 이 키는 앱에 들어가도 되는 공개 키예요. **secret / service_role 키는 절대 앱이나 저장소에 넣지 마세요.**
+3. **publishable 키**(`sb_publishable_…`)는 이미 `scripts/generate_xcodeproj.py`의 `SUPABASE_ANON_KEY`에 들어 있어요. 앱에 들어가도 되는 공개 키예요. **secret / service_role 키는 절대 앱이나 저장소에 넣지 마세요.**
+
+마이그레이션 두 개(`accounts_and_bottles`, `lock_handle_new_user`)는 2026-11-16에 프로젝트에 적용했어요. 1번(익명 로그인 켜기)은 대시보드에서만 할 수 있어요.
 
 ## 들어 있는 것
 

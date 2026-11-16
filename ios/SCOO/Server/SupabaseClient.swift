@@ -5,7 +5,7 @@ import Security
 /// on the server decides what each signed-in account may do. Never put a secret / service_role key here.
 enum SupabaseConfig {
     static let url = URL(string: "https://ofwexbasbwumfvswkixb.supabase.co")!
-    /// Set through the SUPABASE_ANON_KEY build setting (Info.plist key SupabaseAnonKey).
+    /// The publishable key, set through the SUPABASE_ANON_KEY build setting (Info.plist key SupabaseAnonKey).
     static var anonKey: String? {
         guard let key = Bundle.main.object(forInfoDictionaryKey: "SupabaseAnonKey") as? String,
               !key.isEmpty, !key.hasPrefix("$(") else { return nil }
@@ -88,8 +88,8 @@ actor SupabaseClient {
         guard let key = SupabaseConfig.anonKey else { throw ServerError.notConfigured }
         var request = URLRequest(url: URL(string: "auth/v1/\(path)", relativeTo: SupabaseConfig.url)!)
         request.httpMethod = "POST"
+        // Publishable keys (sb_publishable_...) go in the apikey header only; they are not JWTs.
         request.setValue(key, forHTTPHeaderField: "apikey")
-        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (data, response) = try await urlSession.data(for: request)
