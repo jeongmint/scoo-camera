@@ -24,10 +24,10 @@ python3 tools/breeding/breed.py adult tools/breeding/out/chiko-sia-clean.png --n
 ```bash
 pip install openai pillow numpy
 export OPENAI_API_KEY=...
-python3 tools/breeding/breed.py generate --model <모델 ID> --pair chiko:sia --count 3
+python3 tools/breeding/breed.py generate --pair chiko:sia --count 3
 ```
 
-- `--model`은 OpenAI 문서에서 GPT Image 2.6의 정확한 ID를 확인해서 넣어요. 이 명령은 아직 실제 API로 돌려보지 못했어요.
+- 기본값은 `gpt-image-2.6-flare` 모델, `low` 품질이에요(가장 저렴). `--model gpt-image-2.6-sunburst`, `--quality medium|high`로 바꿀 수 있어요. 토리 × 시아로 실제 생성을 확인했어요.
 - 조합마다 `-raw`(원본), `-baby`(정리), `-adult`(데이지) 세 장이 생겨요.
 - `--pair`를 빼면 이벤트를 뺀 24종의 552개 조합 전부예요. 비용이 크니 먼저 몇 조합으로 시험하세요.
 
