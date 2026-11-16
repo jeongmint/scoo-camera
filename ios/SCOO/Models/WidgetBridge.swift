@@ -17,7 +17,12 @@ enum WidgetBridge {
 
     /// Call when something outside the garden changes (the user's friend, a new baby).
     static func refresh() {
-        guard let garden = lastGarden, WidgetShared.container != nil else { return }
+        guard let garden = lastGarden else { return }
+        // The walk Live Activity counts photos since it started; it works even without the app group.
+        if let started = WalkMode.startedAt {
+            WalkMode.update(photos: garden.photos.filter { $0.date >= started }.count)
+        }
+        guard WidgetShared.container != nil else { return }
         let growth = GrowthRules.growth(for: garden.experience)
         let calendar = Calendar.current
         let friend = Companion(rawValue: UserDefaults.standard.string(forKey: "assignedCompanion") ?? "")
@@ -35,6 +40,8 @@ enum WidgetBridge {
                                                   adult: $0.isAdult(moments: garden.moments)) },
             updated: Date())
         writeImage(Image(picked?.assetName ?? "Companion-mori").resizable().scaledToFit(), as: "hero")
+        // Live Activities only take tiny images.
+        writeImage(Image(picked?.assetName ?? "Companion-mori").resizable().scaledToFit(), as: "hero-small", side: 64)
         if let sidekick { writeImage(Image(sidekick.assetName).resizable().scaledToFit(), as: "friend") }
         if let baby { writeImage(BreedPortrait(breed: baby, adult: baby.isAdult(moments: garden.moments)), as: "baby") }
         snapshot.save()
@@ -48,9 +55,9 @@ enum WidgetBridge {
     }
 
     /// Widgets must stay small in memory, so images are rendered at a fixed small size.
-    private static func writeImage<Content: View>(_ content: Content, as name: String) {
+    private static func writeImage<Content: View>(_ content: Content, as name: String, side: CGFloat = imageSide) {
         guard let url = WidgetShared.imageURL(name) else { return }
-        let renderer = ImageRenderer(content: content.frame(width: imageSide, height: imageSide))
+        let renderer = ImageRenderer(content: content.frame(width: side, height: side))
         renderer.scale = 1
         renderer.isOpaque = false
         guard let data = renderer.uiImage?.pngData() else { return }

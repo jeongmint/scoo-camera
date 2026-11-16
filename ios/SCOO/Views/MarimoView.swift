@@ -133,6 +133,9 @@ struct GardenScreen: View {
     @State private var name = ""
     @State private var line = "오늘은 어떤 순간을 먹을까?"
     @State private var film: RenderedFilm?
+    @State private var walking = WalkMode.isActive
+    @State private var walkMessage: String?
+    @StateObject private var locator = DistrictLocator()
     @AppStorage("keepsakePhotoID") private var keepsakeID = ""
     @AppStorage("assignedCompanion") private var assignedRaw = ""
     @AppStorage("companion") private var companionRaw = ""
@@ -208,6 +211,9 @@ struct GardenScreen: View {
                     VStack(spacing: 10) {
                         NavigationLink { BreedScreen() } label: { menuRow("교배하러 가기", systemImage: "heart.circle") }
                         NavigationLink { BottleScreen() } label: { menuRow("유리병 입양", systemImage: "water.waves") }
+                        Button { toggleWalk() } label: {
+                            menuRow(walking ? "산책 모드 끝내기" : "산책 모드 시작 (잠금 화면에 함께)", systemImage: walking ? "figure.walk.departure" : "figure.walk")
+                        }
                     }
                     .buttonStyle(.plain)
                     VStack(alignment: .leading, spacing: 10) {
@@ -220,6 +226,10 @@ struct GardenScreen: View {
                 .navigationTitle("작은 친구").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("닫기") { dismiss() } } }
                 .sheet(item: $film) { film in FilmStripSheet(image: film.image) }
+                .onAppear { walking = WalkMode.isActive }
+                .alert("산책 모드", isPresented: Binding(get: { walkMessage != nil }, set: { if !$0 { walkMessage = nil } })) {
+                    Button("확인") { walkMessage = nil }
+                } message: { Text(walkMessage ?? "") }
                 .alert("마리모 이름", isPresented: $renaming) {
                     TextField("이름 (최대 12자)", text: $name)
                     Button("저장") { Task { await garden.rename(name) } }
@@ -227,6 +237,27 @@ struct GardenScreen: View {
                 }
         }.tint(Palette.moss)
     }
+    private func toggleWalk() {
+        if walking {
+            WalkMode.end()
+            walking = false
+            return
+        }
+        do {
+            try WalkMode.start(heroName: floatingFriend?.title ?? garden.snapshot.name, district: nil)
+            walking = true
+            WidgetBridge.refresh()
+            // Fill in the district once it is known.
+            Task {
+                if case .success(let district) = await locator.currentDistrict() {
+                    WalkMode.update(district: district.rawValue)
+                }
+            }
+        } catch {
+            walkMessage = error.localizedDescription
+        }
+    }
+
     private func makeFilm() {
         let records = todayPhotos
         let images = FilmStrip.images(for: records, url: garden.fileURL(for:))

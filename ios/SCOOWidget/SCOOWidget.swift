@@ -2,6 +2,7 @@ import WidgetKit
 import SwiftUI
 import AppIntents
 import UIKit
+import ActivityKit
 
 // MARK: - Timeline
 
@@ -194,9 +195,62 @@ struct SCOOWidget: Widget {
     }
 }
 
+// MARK: - 산책 모드 (Live Activity)
+
+struct WalkLiveActivity: Widget {
+    var body: some WidgetConfiguration {
+        ActivityConfiguration(for: WalkAttributes.self) { context in
+            HStack(spacing: 14) {
+                SharedImage(name: "hero-small").frame(width: 48, height: 48)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("\(context.attributes.heroName)랑 산책 중").font(.headline)
+                    Text(walkLine(context.state)).font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                Text(context.attributes.startedAt, style: .timer)
+                    .font(.system(size: 15, weight: .medium, design: .monospaced))
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 64)
+            }
+            .padding(16)
+            .foregroundStyle(Ink.ink)
+            .activityBackgroundTint(Ink.cream)
+            .activitySystemActionForegroundColor(Ink.ink)
+        } dynamicIsland: { context in
+            DynamicIsland {
+                DynamicIslandExpandedRegion(.leading) {
+                    SharedImage(name: "hero-small").frame(width: 40, height: 40)
+                }
+                DynamicIslandExpandedRegion(.trailing) {
+                    Text("\(context.state.photos)장").font(.title3.weight(.semibold))
+                }
+                DynamicIslandExpandedRegion(.bottom) {
+                    HStack {
+                        Text("\(context.attributes.heroName)랑 산책 중 · \(context.state.district ?? "어디로 갈까")").font(.caption)
+                        Spacer()
+                        Text(context.attributes.startedAt, style: .timer).font(.caption.monospacedDigit()).frame(width: 56)
+                    }
+                }
+            } compactLeading: {
+                SharedImage(name: "hero-small").frame(width: 22, height: 22)
+            } compactTrailing: {
+                Text("\(context.state.photos)장").font(.caption2.weight(.semibold))
+            } minimal: {
+                SharedImage(name: "hero-small").frame(width: 20, height: 20)
+            }
+        }
+    }
+
+    private func walkLine(_ state: WalkAttributes.ContentState) -> String {
+        let place = state.district.map { "\($0) · " } ?? ""
+        return state.photos == 0 ? "\(place)첫 순간을 찾는 중" : "\(place)\(state.photos)장 찍었어"
+    }
+}
+
 @main
 struct SCOOWidgetBundle: WidgetBundle {
     var body: some Widget {
         SCOOWidget()
+        WalkLiveActivity()
     }
 }
