@@ -7,7 +7,7 @@ actor PhotoPipeline {
     private let context = CIContext(options: [.cacheIntermediates: false])
 
     func process(data: Data, look: FilmLook, mode: CaptureMode, dateStamp: Bool, aspectRatio: CGFloat? = nil,
-                 companion: Companion? = nil) throws -> ProcessedPhoto {
+                 companion: Companion? = nil, spot: CompanionSpot? = nil) throws -> ProcessedPhoto {
         guard let uiImage = UIImage(data: data) else { throw SCOOError.message("사진을 열 수 없어요.") }
         // UIKit normalizes all EXIF orientations before cropping or Vision analysis.
         let size = uiImage.size
@@ -35,7 +35,7 @@ actor PhotoPipeline {
         let classification = classify(analysisImage, mode: mode)
         let bonus = quality(analysisImage)
         var filmInput = cropped
-        if let companion, let together = place(companion, on: analysisImage) {
+        if let companion, let spot, let together = place(companion, at: spot, on: analysisImage) {
             filmInput = CIImage(cgImage: together)
         }
         let result = look.apply(to: filmInput, finishing: true)
@@ -60,11 +60,11 @@ actor PhotoPipeline {
     }
 
     /// Draws the friend into the frame at the same spot the viewfinder showed it. Returns nil if the image is missing.
-    private func place(_ companion: Companion, on base: CGImage) -> CGImage? {
+    private func place(_ companion: Companion, at spot: CompanionSpot, on base: CGImage) -> CGImage? {
         guard let sticker = UIImage(named: companion.assetName) else { return nil }
         let size = CGSize(width: base.width, height: base.height)
         let format = UIGraphicsImageRendererFormat(); format.scale = 1; format.opaque = true
-        let frame = Companion.frame(in: size)
+        let frame = spot.frame(in: size)
         return UIGraphicsImageRenderer(size: size, format: format).image { context in
             UIImage(cgImage: base).draw(in: CGRect(origin: .zero, size: size))
             // Same soft drop shadow as on screen, scaled to the photo.

@@ -21,17 +21,21 @@ enum WidgetBridge {
         let growth = GrowthRules.growth(for: garden.experience)
         let calendar = Calendar.current
         let friend = Companion(rawValue: UserDefaults.standard.string(forKey: "assignedCompanion") ?? "")
+        // The friend picked in 같이 찍기 floats in Mori's place in the app, so it leads the widget too.
+        let picked = Companion(rawValue: UserDefaults.standard.string(forKey: "companion") ?? "")
+            .flatMap { choice in friend.map(Companion.owned(assigned:))?.contains(choice) == true ? choice : nil }
+        let sidekick = picked == friend ? nil : friend
         let baby = latestBaby()
         let snapshot = WidgetSnapshot(
-            name: garden.name, level: growth.level, progress: growth.progress, moments: garden.moments,
+            name: picked?.title ?? garden.name, level: growth.level, progress: growth.progress, moments: garden.moments,
             todayCount: garden.photos.filter { calendar.isDateInToday($0.date) }.count,
             today: calendar.startOfDay(for: Date()),
-            friendName: friend?.title,
+            friendName: sidekick?.title,
             baby: baby.map { WidgetSnapshot.Baby(title: $0.title, photosLeft: $0.photosLeft(moments: garden.moments),
                                                   adult: $0.isAdult(moments: garden.moments)) },
             updated: Date())
-        writeImage(Image("Companion-mori").resizable().scaledToFit(), as: "mori")
-        if let friend { writeImage(Image(friend.assetName).resizable().scaledToFit(), as: "friend") }
+        writeImage(Image(picked?.assetName ?? "Companion-mori").resizable().scaledToFit(), as: "hero")
+        if let sidekick { writeImage(Image(sidekick.assetName).resizable().scaledToFit(), as: "friend") }
         if let baby { writeImage(BreedPortrait(breed: baby, adult: baby.isAdult(moments: garden.moments)), as: "baby") }
         snapshot.save()
         WidgetCenter.shared.reloadAllTimelines()

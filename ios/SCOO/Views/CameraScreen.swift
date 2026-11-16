@@ -63,7 +63,6 @@ struct CameraScreen: View {
                     RoundedRectangle(cornerRadius: 3).stroke(.yellow.opacity(0.9), lineWidth: 1)
                         .frame(width: 54, height: 54).position(focusPoint).allowsHitTesting(false)
                 }
-                companionView(size: size)
                 chrome(insets: insets)
                 floatingMori(size: size, insets: insets)
                 if shutterFlash { Color.white.opacity(0.8).allowsHitTesting(false) }
@@ -126,7 +125,9 @@ struct CameraScreen: View {
                         throw SCOOError.message("사진을 불러오지 못했어요.")
                     }
                     // Imported photos keep their original aspect ratio.
-                    await process(data, mode: capturedMode, stamp: stamp, aspect: nil, companion: together)
+                    // Imported photos keep their own size; use the saved floating spot at a standard size.
+                    let spot = CompanionSpot(center: CGPoint(x: savedMoriX, y: savedMoriY), width: CompanionSpot.defaultWidth)
+                    await process(data, mode: capturedMode, stamp: stamp, aspect: nil, companion: together, spot: spot)
                 } catch { processing = false; calmDown(); notify(error.localizedDescription) }
                 selectedItem = nil
             }
@@ -135,6 +136,7 @@ struct CameraScreen: View {
         .onChange(of: garden.message) { _, error in if let error { notify(error); garden.message = nil } }
         .onDisappear { camera.stop(); toastTask?.cancel(); focusTask?.cancel(); expressionTask?.cancel() }
         .onChange(of: assignedRaw) { _, _ in WidgetBridge.refresh() }
+        .onChange(of: companionRaw) { _, _ in WidgetBridge.refresh() }
         .sheet(item: $sheet, onDismiss: {
             if scenePhase == .active && !importing { camera.start() }
         }) { value in
@@ -249,27 +251,13 @@ struct CameraScreen: View {
         return CGPoint(x: CGFloat(bounds.x) * size.width, y: CGFloat(bounds.y) * size.height)
     }
 
-    /// The friend standing in the viewfinder. It is composited into the photo at the same spot (see `Companion.frame`).
-    @ViewBuilder
-    private func companionView(size: CGSize) -> some View {
-        if let companion {
-            let frame = Companion.frame(in: size)
-            Image(companion.assetName).resizable().scaledToFit()
-                .frame(width: frame.width, height: frame.height)
-                .shadow(color: .black.opacity(0.28), radius: frame.width * 0.07, y: frame.width * 0.05)
-                // a little hop when the photo gets a reaction
-                .offset(y: expression == .normal || expression == .shutter ? 0 : -frame.width * 0.04)
-                .animation(.spring(response: 0.3, dampingFraction: 0.55), value: expression)
-                .position(x: frame.midX, y: frame.midY)
-                .allowsHitTesting(false)
-                .accessibilityLabel("\(companion.title)와 같이 찍는 중")
-        }
-    }
-
     private func floatingMori(size: CGSize, insets: EdgeInsets) -> some View {
         let resting = placement(MoriPlacement(x: savedMoriX, y: savedMoriY), size: size, insets: insets)
         let current = dragPoint ?? resting
         let viewportAspect = size.width / max(1, size.height)
+        // The picked friend is drawn into the photo exactly where and as big as it floats.
+        let spot = CompanionSpot(center: CGPoint(x: resting.x / max(1, size.width), y: resting.y / max(1, size.height)),
+                                 width: moriSize / max(1, size.width))
         let slop: CGFloat = 18
         // One gesture decides everything: short press = shutter, hold then drag = move.
         let press = DragGesture(minimumDistance: 0, coordinateSpace: .named("cameraViewport"))
@@ -295,15 +283,21 @@ struct CameraScreen: View {
                     moveHintSeen = true
                     UISelectionFeedbackGenerator().selectionChanged()
                 } else if hypot(value.translation.width, value.translation.height) <= slop {
-                    takePhoto(aspect: viewportAspect)
+                    takePhoto(aspect: viewportAspect, spot: spot)
                 }
                 moving = false
                 dragPoint = nil
             }
         return ZStack {
-            MarimoView(size: moriSize, happy: processing || camera.isCapturing,
-                       expression: expression == .normal ? nil : expression, floats: !moving)
-                .shadow(color: .black.opacity(0.35), radius: 9, y: 7)
+            Group {
+                if let companion {
+                    FloatingFriend(assetName: companion.assetName, size: moriSize, expression: expression, floats: !moving)
+                } else {
+                    MarimoView(size: moriSize, happy: processing || camera.isCapturing,
+                               expression: expression == .normal ? nil : expression, floats: !moving)
+                }
+            }
+            .shadow(color: .black.opacity(0.35), radius: 9, y: 7)
             if processing || camera.isCapturing { ProgressView().tint(.white).scaleEffect(0.75) }
             if moving {
                 Text("여기에 둘까?").font(.system(size: 9, weight: .medium))
@@ -318,11 +312,11 @@ struct CameraScreen: View {
         .animation(.spring(response: 0.25, dampingFraction: 0.7), value: moving)
         .gesture(press)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(garden.snapshot.name), 사진 촬영")
+        .accessibilityLabel("\(companion?.title ?? garden.snapshot.name), 사진 촬영")
         .accessibilityValue("레벨 \(garden.growth.level)")
         .accessibilityHint("두 번 탭하면 촬영합니다. 화면에서 꾹 누르고 끌면 이동합니다.")
         .accessibilityAddTraits(.isButton)
-        .accessibilityAction { takePhoto(aspect: viewportAspect) }
+        .accessibilityAction { takePhoto(aspect: viewportAspect, spot: spot) }
         .accessibilityAction(named: "중앙 아래로 이동") {
             savedMoriX = MoriPlacement.initial.x
             savedMoriY = MoriPlacement.initial.y
@@ -330,7 +324,7 @@ struct CameraScreen: View {
         .position(current)
     }
 
-    private func takePhoto(aspect: CGFloat) {
+    private func takePhoto(aspect: CGFloat, spot: CompanionSpot) {
         guard canCapture else {
             if !camera.isRunning { notify("카메라를 켜면 모리를 눌러 촬영할 수 있어요.") }
             else if !garden.ready { notify("모리가 아직 준비 중이에요. 잠시 후 다시 눌러 주세요.") }
@@ -342,7 +336,7 @@ struct CameraScreen: View {
         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
         camera.capture(flash: flash) { result in
             switch result {
-            case .success(let data): Task { await process(data, mode: capturedMode, stamp: stamp, aspect: aspect, companion: together) }
+            case .success(let data): Task { await process(data, mode: capturedMode, stamp: stamp, aspect: aspect, companion: together, spot: spot) }
             case .failure(let error): processing = false; calmDown(); notify(error.localizedDescription)
             }
         }
@@ -406,11 +400,11 @@ struct CameraScreen: View {
         }
     }
 
-    private func process(_ data: Data, mode: CaptureMode, stamp: Bool, aspect: CGFloat?, companion: Companion?) async {
+    private func process(_ data: Data, mode: CaptureMode, stamp: Bool, aspect: CGFloat?, companion: Companion?, spot: CompanionSpot) async {
         defer { processing = false }
         do {
             let oldLevel = garden.growth.level
-            let result = try await pipeline.process(data: data, look: look, mode: mode, dateStamp: stamp, aspectRatio: aspect, companion: companion)
+            let result = try await pipeline.process(data: data, look: look, mode: mode, dateStamp: stamp, aspectRatio: aspect, companion: companion, spot: spot)
             let gain = try await garden.add(result, filter: look, mode: mode)
             react(MoriExpression.reaction(isFood: result.isFood, bonus: result.bonus, leveledUp: garden.growth.level > oldLevel,
                                           previous: lastReaction, roll: .random(in: 0..<1)))
@@ -442,4 +436,29 @@ private struct CameraPreview: UIViewRepresentable {
     let renderer: PreviewRenderer
     func makeUIView(context: Context) -> MTKView { renderer.makeView() }
     func updateUIView(_ view: MTKView, context: Context) { }
+}
+
+/// A picked friend floating in Mori's place. PNG friends have no drawn faces, so they react with their body:
+/// a small squish while the photo is taken and a hop when it reacts.
+private struct FloatingFriend: View {
+    let assetName: String
+    let size: CGFloat
+    let expression: MoriExpression
+    var floats = true
+    @State private var floating = false
+
+    private var reacting: Bool { expression != .normal && expression != .shutter }
+
+    var body: some View {
+        Image(assetName).resizable().scaledToFit()
+            .frame(width: size, height: size)
+            .scaleEffect(x: expression == .shutter ? 1.05 : 1, y: expression == .shutter ? 0.93 : 1, anchor: .bottom)
+            .scaleEffect(reacting ? 1.08 : 1)
+            .offset(y: reacting ? -size * 0.08 : 0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.55), value: expression)
+            .offset(y: floats ? (floating ? -4 : 3) : 0)
+            .rotationEffect(.degrees(floats ? (floating ? 2 : -2) : 0))
+            .animation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true), value: floating)
+            .onAppear { floating = true }
+    }
 }

@@ -104,7 +104,7 @@ struct SCOOWidgetView: View {
 
     private var pettable: some View {
         Button(intent: PetIntent()) {
-            SharedImage(name: "mori")
+            SharedImage(name: "hero")
                 .scaleEffect(entry.petted ? 1.08 : 1)
                 .rotationEffect(.degrees(entry.petted ? -6 : 0))
         }
