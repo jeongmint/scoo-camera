@@ -12,6 +12,8 @@ final class CameraService: NSObject, ObservableObject {
     @Published private(set) var errorMessage: String?
     @Published private(set) var zoom: CGFloat = 1
     @Published private(set) var hasFlash = false
+    @Published private(set) var isRecording = false
+    @Published private(set) var recordingStarted: Date?
 
     private let session = AVCaptureSession()
     private let photoOutput = AVCapturePhotoOutput()
@@ -32,6 +34,11 @@ final class CameraService: NSObject, ObservableObject {
     private var runtimeObserver: NSObjectProtocol?
     private var interruptionObserver: NSObjectProtocol?
     private var interruptionEndedObserver: NSObjectProtocol?
+    // Video clips: touched only on frameQueue.
+    private var wantsClip = false
+    private var clip: ClipWriter?
+    private var clipFinished: ((Result<ClipWriter.Clip, Error>) -> Void)?
+    private lazy var clipContext = CIContext(options: [.cacheIntermediates: false])
 
     override init() {
         super.init()
@@ -91,11 +98,41 @@ final class CameraService: NSObject, ObservableObject {
     }
 
     func stop() {
+        stopRecording()
         sessionQueue.async {
             self.wantsRunning = false
             if self.session.isRunning { self.session.stopRunning() }
             self.publishRunning()
         }
+    }
+
+    /// Starts a short filtered video (silent, up to `ClipWriter.maxSeconds`). `finished` runs on the main queue.
+    func startRecording(finished: @escaping (Result<ClipWriter.Clip, Error>) -> Void) {
+        frameQueue.async {
+            guard !self.wantsClip, self.clip == nil else { return }
+            self.wantsClip = true
+            self.clipFinished = finished
+            DispatchQueue.main.async { self.isRecording = true; self.recordingStarted = Date() }
+        }
+    }
+
+    func stopRecording() {
+        frameQueue.async { self.finishClip() }
+    }
+
+    /// frameQueue only.
+    private func finishClip() {
+        guard wantsClip || clip != nil else { return }
+        wantsClip = false
+        let writer = clip, done = clipFinished
+        clip = nil
+        clipFinished = nil
+        DispatchQueue.main.async { self.isRecording = false; self.recordingStarted = nil }
+        guard let writer else {
+            DispatchQueue.main.async { done?(.failure(SCOOError.message("너무 짧아서 동영상을 만들지 못했어요."))) }
+            return
+        }
+        writer.finish { result in DispatchQueue.main.async { done?(result) } }
     }
 
     private func publishRunning() {
@@ -255,7 +292,17 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         }
         lookLock.lock(); let look = selectedLook; feedUpright = upright; lookLock.unlock()
         // Building the CIImage is only a recipe; the GPU does the work when the preview draws.
-        preview.show(look.apply(to: image, finishing: false))
+        let filtered = look.apply(to: image, finishing: false)
+        preview.show(filtered)
+        if wantsClip {
+            let time = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+            if clip == nil {
+                do { clip = try ClipWriter(firstFrame: filtered.extent, context: clipContext) }
+                catch { finishClip(); return }
+            }
+            clip?.append(filtered, at: time)
+            if let clip, clip.seconds >= ClipWriter.maxSeconds { finishClip() }
+        }
     }
 }
 

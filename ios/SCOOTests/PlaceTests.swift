@@ -11,6 +11,7 @@ final class PlaceTests: XCTestCase {
         """
         let record = try JSONDecoder().decode(PhotoRecord.self, from: Data(old.utf8))
         XCTAssertNil(record.location)
+        XCTAssertFalse(record.isVideo, "예전 기록은 사진이에요")
     }
 
     func testLocationRoundTrips() throws {

@@ -214,7 +214,7 @@ struct CameraScreen: View {
             }.padding(.horizontal, 22)
             Spacer(minLength: 0)
             if !moveHintSeen {
-                Text("모리를 눌러 찰칵 · 꾹 누르고 끌어서 이동")
+                Text("모리를 눌러 찰칵 · 위로 쓸면 동영상 · 꾹 눌러 이동")
                     .font(.system(size: 10, weight: .medium)).padding(.bottom, 17)
                     .allowsHitTesting(false)
             }
@@ -324,7 +324,12 @@ struct CameraScreen: View {
                     moveHintSeen = true
                     UISelectionFeedbackGenerator().selectionChanged()
                 } else if hypot(value.translation.width, value.translation.height) <= slop {
-                    takePhoto(aspect: viewportAspect, spot: spot)
+                    // a tap: take a photo, or stop the video that is running
+                    if camera.isRecording { camera.stopRecording() } else { takePhoto(aspect: viewportAspect, spot: spot) }
+                } else if abs(value.translation.height) > abs(value.translation.width) {
+                    // a quick vertical swipe: up starts a video, down stops it
+                    if value.translation.height < -50, !camera.isRecording { startVideo() }
+                    else if value.translation.height > 50, camera.isRecording { camera.stopRecording() }
                 }
                 moving = false
                 dragPoint = nil
@@ -340,6 +345,19 @@ struct CameraScreen: View {
             }
             .shadow(color: .black.opacity(0.35), radius: 9, y: 7)
             if processing || camera.isCapturing { ProgressView().tint(.white).scaleEffect(0.75) }
+            if camera.isRecording, let started = camera.recordingStarted {
+                Circle().stroke(.red.opacity(0.9), lineWidth: 3).frame(width: moriSize + 10, height: moriSize + 10)
+                    .allowsHitTesting(false)
+                HStack(spacing: 4) {
+                    Circle().fill(.red).frame(width: 6, height: 6)
+                    Text(timerInterval: started...started.addingTimeInterval(ClipWriter.maxSeconds), countsDown: false)
+                        .monospacedDigit()
+                }
+                .font(.system(size: 10, weight: .semibold))
+                .padding(.horizontal, 10).padding(.vertical, 5)
+                .background(.black.opacity(0.55), in: Capsule()).foregroundStyle(.white)
+                .offset(y: -moriSize / 2 - 16).allowsHitTesting(false)
+            }
             if moving {
                 Text("여기에 둘까?").font(.system(size: 9, weight: .medium))
                     .padding(.horizontal, 10).padding(.vertical, 6)
@@ -358,6 +376,9 @@ struct CameraScreen: View {
         .accessibilityHint("두 번 탭하면 촬영합니다. 화면에서 꾹 누르고 끌면 이동합니다.")
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { takePhoto(aspect: viewportAspect, spot: spot) }
+        .accessibilityAction(named: camera.isRecording ? "동영상 멈추기" : "동영상 찍기") {
+            if camera.isRecording { camera.stopRecording() } else { startVideo() }
+        }
         .accessibilityAction(named: "중앙 아래로 이동") {
             savedMoriX = MoriPlacement.initial.x
             savedMoriY = MoriPlacement.initial.y
@@ -404,6 +425,50 @@ struct CameraScreen: View {
             districtRaw = ""
             assignedRaw = friend.rawValue
             notify("새 친구 도착! \(friend.title) · \(failure.reason) 이번엔 랜덤으로 왔어요.")
+        }
+    }
+
+    // MARK: Video
+
+    /// Swipe up on the floating friend: a short silent video with the Eternal look, up to 15 seconds.
+    private func startVideo() {
+        guard canCapture else {
+            if !camera.isRunning { notify("카메라를 켜면 위로 쓸어서 동영상을 찍을 수 있어요.") }
+            return
+        }
+        let capturedMode = mode
+        let placeLookup: Task<PhotoLocation?, Never>? = savePlace ? Task { await locator.quickLocation() } : nil
+        UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+        camera.startRecording { result in
+            switch result {
+            case .success(let clip):
+                Task {
+                    let place = await placeLookup?.value
+                    await keepClip(clip, mode: capturedMode, place: place)
+                }
+            case .failure(let error):
+                notify(error.localizedDescription)
+            }
+        }
+    }
+
+    private func keepClip(_ clip: ClipWriter.Clip, mode: CaptureMode, place: PhotoLocation?) async {
+        processing = true
+        defer { processing = false }
+        let moment = ProcessedPhoto(jpeg: clip.poster, isFood: false, bonus: 0,
+                                    classificationNote: "동영상 \(max(1, Int(clip.seconds.rounded())))초")
+        do {
+            let gain = try await garden.add(moment, filter: look, mode: mode, location: place, video: clip.url)
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            react(.smile)
+            notify("움직이는 순간도 냠! · +\(gain) EXP")
+            if autoSave, let stored = garden.snapshot.photos.first, let url = garden.videoURL(for: stored) {
+                do { try await PhotoLibraryWriter.saveVideo(url) }
+                catch { notify("앱에는 저장했어요. \(error.localizedDescription)") }
+            }
+        } catch {
+            try? FileManager.default.removeItem(at: clip.url)
+            notify("동영상을 저장하지 못했어요. \(error.localizedDescription)")
         }
     }
 

@@ -31,6 +31,10 @@ struct PhotoRecord: Identifiable, Codable, Equatable {
     let classificationNote: String
     /// Added later; older records decode with nil.
     var location: PhotoLocation? = nil
+    /// For video moments: the clip next to the poster JPEG in `filename`.
+    var videoFilename: String? = nil
+
+    var isVideo: Bool { videoFilename != nil }
 }
 
 struct GardenSnapshot: Codable {

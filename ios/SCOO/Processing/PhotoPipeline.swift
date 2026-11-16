@@ -126,4 +126,16 @@ enum PhotoLibraryWriter {
             request.addResource(with: .photo, data: data, options: nil)
         }
     }
+
+    static func saveVideo(_ url: URL) async throws {
+        let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+        guard status == .authorized || status == .limited else {
+            throw SCOOError.message("사진 앱 저장 권한이 꺼져 있어요. 설정 > SCOO > 사진에서 허용해 주세요. 앱 안의 영상은 그대로 보관돼요.")
+        }
+        try await PHPhotoLibrary.shared().performChanges {
+            let options = PHAssetResourceCreationOptions()
+            options.shouldMoveFile = false
+            PHAssetCreationRequest.forAsset().addResource(with: .video, fileURL: url, options: options)
+        }
+    }
 }

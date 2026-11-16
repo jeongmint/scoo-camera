@@ -28,21 +28,33 @@ actor PhotoRepository {
     }
 
     /// `extra` is bonus EXP on top of the usual reward (e.g. 오늘의 미션).
-    func add(_ processed: ProcessedPhoto, filter: FilmLook, mode: CaptureMode, location: PhotoLocation? = nil, extra: Int = 0) throws -> GardenSnapshot {
+    /// `video` is a finished clip to keep with this moment; it is moved into the garden folder.
+    func add(_ processed: ProcessedPhoto, filter: FilmLook, mode: CaptureMode, location: PhotoLocation? = nil, extra: Int = 0,
+             video: URL? = nil) throws -> GardenSnapshot {
         var next = try load()
         let id = UUID()
         let filename = "\(id.uuidString).jpg"
+        let videoFilename = video.map { _ in "\(id.uuidString).mov" }
         let gain = GrowthRules.reward(isFood: processed.isFood, bonus: processed.bonus) + max(0, extra)
         let photo = PhotoRecord(id: id, date: Date(), filename: filename, filter: filter.rawValue,
                                 isFood: processed.isFood, mode: mode, experience: gain,
-                                bonus: processed.bonus, classificationNote: processed.classificationNote, location: location)
+                                bonus: processed.bonus, classificationNote: processed.classificationNote, location: location,
+                                videoFilename: videoFilename)
         let url = Self.directory.appendingPathComponent(filename)
         try processed.jpeg.write(to: url, options: .atomic)
+        if let video, let videoFilename {
+            do { try FileManager.default.moveItem(at: video, to: Self.directory.appendingPathComponent(videoFilename)) }
+            catch { try? FileManager.default.removeItem(at: url); throw error }
+        }
         next.photos.insert(photo, at: 0)
         next.experience += gain
         next.moments += 1
         do { try persist(next) }
-        catch { try? FileManager.default.removeItem(at: url); throw error }
+        catch {
+            try? FileManager.default.removeItem(at: url)
+            if let videoFilename { try? FileManager.default.removeItem(at: Self.directory.appendingPathComponent(videoFilename)) }
+            throw error
+        }
         return next
     }
 
@@ -61,6 +73,7 @@ actor PhotoRepository {
         // The metadata commits before file removal. Orphan cleanup is safe on a later load.
         try persist(next)
         try? FileManager.default.removeItem(at: Self.directory.appendingPathComponent(photo.filename))
+        if let video = photo.videoFilename { try? FileManager.default.removeItem(at: Self.directory.appendingPathComponent(video)) }
         return next
     }
 }
@@ -81,9 +94,10 @@ final class GardenStore: ObservableObject {
     }
 
     @discardableResult
-    func add(_ photo: ProcessedPhoto, filter: FilmLook, mode: CaptureMode, location: PhotoLocation? = nil, extra: Int = 0) async throws -> Int {
+    func add(_ photo: ProcessedPhoto, filter: FilmLook, mode: CaptureMode, location: PhotoLocation? = nil, extra: Int = 0,
+             video: URL? = nil) async throws -> Int {
         let previous = snapshot.experience
-        snapshot = try await repository.add(photo, filter: filter, mode: mode, location: location, extra: extra)
+        snapshot = try await repository.add(photo, filter: filter, mode: mode, location: location, extra: extra, video: video)
         WidgetBridge.publish(snapshot)
         return snapshot.experience - previous
     }
@@ -100,5 +114,9 @@ final class GardenStore: ObservableObject {
 
     func fileURL(for photo: PhotoRecord) -> URL {
         PhotoRepository.directory.appendingPathComponent(photo.filename)
+    }
+
+    func videoURL(for photo: PhotoRecord) -> URL? {
+        photo.videoFilename.map { PhotoRepository.directory.appendingPathComponent($0) }
     }
 }
