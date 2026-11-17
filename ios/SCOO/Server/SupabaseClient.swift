@@ -23,6 +23,17 @@ actor SupabaseClient {
         var refreshToken: String
         var expiresAt: Date
         var userID: String
+        /// Added later; older stored sessions decode with nil (they were anonymous).
+        var isAnonymous: Bool? = nil
+        var email: String? = nil
+    }
+
+    /// What Sign in with Apple did to the account on this device.
+    enum AppleResult: Equatable {
+        /// The anonymous account now has Apple attached: same friends, bottles and letters, kept for good.
+        case linked
+        /// That Apple ID already had an account (e.g. after reinstalling): this device now uses it.
+        case switched
     }
 
     enum ServerError: LocalizedError, Equatable {
@@ -43,6 +54,10 @@ actor SupabaseClient {
                 return "친구가 된 뒤에 편지를 보낼 수 있어요."
             case .http(_, let body) where body.contains("slow down"):
                 return "편지를 너무 빨리 보내고 있어요. 잠시 뒤에 보내 주세요."
+            case .http(_, let body) where body.lowercased().contains("provider is not enabled") || body.contains("provider_disabled"):
+                return "서버에서 Apple 로그인이 아직 꺼져 있어요."
+            case .http(_, let body) where body.lowercased().contains("manual linking"):
+                return "서버에서 계정 연결(manual linking)이 꺼져 있어요."
             case .http(429, _):
                 return "오늘은 새 그림을 충분히 그렸어요. 내일 또 그려 줄게요."
             case .http(_, let body) where body.lowercased().contains("anonymous sign-ins are disabled"):
@@ -63,6 +78,29 @@ actor SupabaseClient {
     }
 
     var currentUserID: String? { session?.userID }
+    /// True while the account exists only on this device (no Apple ID attached).
+    var isAnonymous: Bool { session?.isAnonymous ?? true }
+    var email: String? { session?.email }
+
+    /// Sign in with Apple: attaches Apple to the current anonymous account, or, if that Apple ID already
+    /// belongs to an account, switches this device to it. `nonce` is the raw nonce whose SHA-256 went to Apple.
+    func signInWithApple(idToken: String, nonce: String) async throws -> AppleResult {
+        let current = try await signIn()
+        let body: [String: Any] = ["provider": "apple", "id_token": idToken, "nonce": nonce]
+        if current.isAnonymous ?? true {
+            var linking = body
+            linking["link_identity"] = true
+            do {
+                _ = try await authenticate(path: "token?grant_type=id_token", body: linking, bearer: current.accessToken)
+                return .linked
+            } catch ServerError.http(_, let text) where text.contains("identity_already_exists") || text.contains("already linked") {
+                // This Apple ID already has an account (e.g. made before reinstalling): fall through and sign in to it.
+                // Any other failure (linking switched off, bad token) is thrown, so the anonymous account is never left behind by accident.
+            }
+        }
+        _ = try await authenticate(path: "token?grant_type=id_token", body: body)
+        return .switched
+    }
 
     /// The signed-in session, creating an anonymous account on first use and refreshing an expiring token.
     @discardableResult
@@ -104,18 +142,24 @@ actor SupabaseClient {
 
     // MARK: Plumbing
 
-    private func authenticate(path: String, body: [String: Any]) async throws -> Session {
+    private func authenticate(path: String, body: [String: Any], bearer: String? = nil) async throws -> Session {
         guard let key = SupabaseConfig.anonKey else { throw ServerError.notConfigured }
         var request = URLRequest(url: URL(string: "auth/v1/\(path)", relativeTo: SupabaseConfig.url)!)
         request.httpMethod = "POST"
         // Publishable keys (sb_publishable_...) go in the apikey header only; they are not JWTs.
         request.setValue(key, forHTTPHeaderField: "apikey")
+        // Linking an identity acts on the signed-in user.
+        if let bearer { request.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization") }
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (data, response) = try await urlSession.data(for: request)
         try Self.check(response, data)
         struct Answer: Decodable {
-            struct User: Decodable { let id: String }
+            struct User: Decodable {
+                let id: String
+                let is_anonymous: Bool?
+                let email: String?
+            }
             let access_token: String
             let refresh_token: String
             let expires_in: Double
@@ -123,7 +167,8 @@ actor SupabaseClient {
         }
         let answer = try JSONDecoder().decode(Answer.self, from: data)
         let fresh = Session(accessToken: answer.access_token, refreshToken: answer.refresh_token,
-                            expiresAt: Date().addingTimeInterval(answer.expires_in), userID: answer.user.id)
+                            expiresAt: Date().addingTimeInterval(answer.expires_in), userID: answer.user.id,
+                            isAnonymous: answer.user.is_anonymous ?? false, email: answer.user.email)
         session = fresh
         if let stored = try? JSONEncoder().encode(fresh) { keychain.write(stored) }
         return fresh

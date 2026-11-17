@@ -1,4 +1,5 @@
 import SwiftUI
+import AuthenticationServices
 import UIKit
 
 struct SettingsScreen: View {
@@ -14,6 +15,9 @@ struct SettingsScreen: View {
     @State private var accountID: String?
     @State private var connecting = false
     @State private var nickname = ""
+    @State private var anonymous = true
+    @State private var email: String?
+    @State private var appleNonce = ""
     @StateObject private var social = SocialStore()
     @StateObject private var locator = DistrictLocator()
     @State private var finding = false
@@ -44,7 +48,20 @@ struct SettingsScreen: View {
                 }
                 Section {
                     if SupabaseConfig.isConfigured {
-                        LabeledContent("계정", value: accountID.map { "익명 · \($0.prefix(8))" } ?? "아직 연결 안 됨")
+                        LabeledContent("계정", value: accountID.map { id in anonymous ? "익명 · \(id.prefix(8))" : "Apple · \(email ?? String(id.prefix(8)))" } ?? "아직 연결 안 됨")
+                        if accountID != nil && anonymous {
+                            SignInWithAppleButton(.continue) { request in
+                                appleNonce = AppleNonce.make()
+                                request.requestedScopes = [.email]
+                                request.nonce = AppleNonce.sha256(appleNonce)
+                            } onCompletion: { result in
+                                Task { await finishApple(result) }
+                            }
+                            .signInWithAppleButtonStyle(.black)
+                            .frame(height: 44)
+                            Text("Apple로 이어 두면 앱을 지우거나 폰을 바꿔도 친구·유리병·편지가 그대로 남아요.")
+                                .font(.caption2).foregroundStyle(.secondary)
+                        }
                         if accountID == nil {
                             Button(connecting ? "연결 중…" : "서버에 연결하기") { Task { await connect() } }.disabled(connecting)
                         }
@@ -70,10 +87,7 @@ struct SettingsScreen: View {
                 } header: { Text("계정 · 서버") } footer: {
                     Text("로그인 없이 익명 계정으로 시작해요. 계정 정보는 이 iPhone의 키체인에 보관돼요. 끄면 유리병은 기기 안의 가짜 바다로 돌아가요.")
                 }
-                .task {
-                    accountID = await SupabaseClient.shared.currentUserID
-                    if accountID != nil { await social.refresh() }
-                }
+                .task { await refreshAccount() }
                 Section("Eternal") {
                     Text("차가운 회색 그림자와 따뜻한 빛, 짙은 검정과 작은 디지털 입자. 필터는 Eternal 하나만 사용해요.").font(.footnote)
                 }
@@ -99,8 +113,39 @@ struct SettingsScreen: View {
     private func connect() async {
         connecting = true
         defer { connecting = false }
-        do { accountID = try await SupabaseClient.shared.signIn().userID }
+        do { _ = try await SupabaseClient.shared.signIn() }
         catch { note = error.localizedDescription }
+        await refreshAccount()
+    }
+
+    private func refreshAccount() async {
+        let client = SupabaseClient.shared
+        accountID = await client.currentUserID
+        anonymous = await client.isAnonymous
+        email = await client.email
+        if accountID != nil { await social.refresh() }
+    }
+
+    private func finishApple(_ result: Result<ASAuthorization, Error>) async {
+        switch result {
+        case .failure(let error):
+            if (error as? ASAuthorizationError)?.code != .canceled { note = error.localizedDescription }
+        case .success(let authorization):
+            guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+                  let tokenData = credential.identityToken, let token = String(data: tokenData, encoding: .utf8) else {
+                note = "Apple에서 로그인 정보를 받지 못했어요."
+                return
+            }
+            do {
+                switch try await SupabaseClient.shared.signInWithApple(idToken: token, nonce: appleNonce) {
+                case .linked: note = "Apple 계정과 이어졌어요. 이제 앱을 지워도 그대로 남아요."
+                case .switched: note = "이 Apple 계정에 있던 기존 계정으로 돌아왔어요."
+                }
+            } catch {
+                note = error.localizedDescription
+            }
+            await refreshAccount()
+        }
     }
 
     private func receive(in district: SeoulDistrict) {
