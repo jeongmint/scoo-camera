@@ -12,6 +12,10 @@ enum SupabaseConfig {
         return key
     }
     static var isConfigured: Bool { anonKey != nil }
+    /// Sign in with Apple needs a paid Apple Developer team (see `generate_xcodeproj.py --paid-team`).
+    static var appleSignInAvailable: Bool {
+        (Bundle.main.object(forInfoDictionaryKey: "SCOOPaidTeam") as? String) == "YES"
+    }
 }
 
 /// A small REST client for Supabase: anonymous accounts (kept in the Keychain) and PostgREST calls.

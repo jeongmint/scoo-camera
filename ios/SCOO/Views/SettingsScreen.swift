@@ -52,15 +52,17 @@ struct SettingsScreen: View {
                     if SupabaseConfig.isConfigured {
                         LabeledContent("계정", value: accountLabel)
                         if accountID != nil && anonymous {
-                            SignInWithAppleButton(.continue) { request in
-                                appleNonce = AppleNonce.make()
-                                request.requestedScopes = [.email]
-                                request.nonce = AppleNonce.sha256(appleNonce)
-                            } onCompletion: { result in
-                                Task { await finishApple(result) }
+                            if SupabaseConfig.appleSignInAvailable {
+                                SignInWithAppleButton(.continue) { request in
+                                    appleNonce = AppleNonce.make()
+                                    request.requestedScopes = [.email]
+                                    request.nonce = AppleNonce.sha256(appleNonce)
+                                } onCompletion: { result in
+                                    Task { await finishApple(result) }
+                                }
+                                .signInWithAppleButtonStyle(.black)
+                                .frame(height: 44)
                             }
-                            .signInWithAppleButtonStyle(.black)
-                            .frame(height: 44)
                             ForEach(OAuthProvider.allCases) { option in
                                 Button { Task { await finishWeb(option) } } label: {
                                     Text(webLogin == option ? "\(option.title) 로그인 중…" : "\(option.title)로 계속하기")
@@ -74,7 +76,7 @@ struct SettingsScreen: View {
                                 .buttonStyle(.plain)
                                 .disabled(webLogin != nil)
                             }
-                            Text("Apple·Google·카카오 중 하나로 이어 두면 앱을 지우거나 폰을 바꿔도 친구·유리병·편지가 그대로 남아요.")
+                            Text("\(loginNames) 중 하나로 이어 두면 앱을 지우거나 폰을 바꿔도 친구·유리병·편지가 그대로 남아요.")
                                 .font(.caption2).foregroundStyle(.secondary)
                         }
                         if accountID == nil {
@@ -100,7 +102,7 @@ struct SettingsScreen: View {
                         Text("서버 키가 아직 없어서 유리병은 이 기기 안에서만 시험해요.").font(.footnote)
                     }
                 } header: { Text("계정 · 서버") } footer: {
-                    Text("로그인 없이 익명 계정으로 시작해요. Apple·Google·카카오로 이어 두면 계정이 지켜져요. 계정 정보는 이 iPhone의 키체인에 보관돼요. 끄면 유리병은 기기 안의 가짜 바다로 돌아가요.")
+                    Text("로그인 없이 익명 계정으로 시작해요. \(loginNames)로 이어 두면 계정이 지켜져요. 계정 정보는 이 iPhone의 키체인에 보관돼요. 끄면 유리병은 기기 안의 가짜 바다로 돌아가요.")
                 }
                 .task { await refreshAccount() }
                 Section("Eternal") {
@@ -140,6 +142,11 @@ struct SettingsScreen: View {
         email = await client.email
         provider = await client.provider
         if accountID != nil { await social.refresh() }
+    }
+
+    /// Apple only shows up in builds signed by a paid team.
+    private var loginNames: String {
+        SupabaseConfig.appleSignInAvailable ? "Apple·Google·카카오" : "Google·카카오"
     }
 
     private var accountLabel: String {

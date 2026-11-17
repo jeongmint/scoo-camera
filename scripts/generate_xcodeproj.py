@@ -1,6 +1,11 @@
 """Regenerate SCOO.xcodeproj without XcodeGen or third-party dependencies."""
 from pathlib import Path
 import hashlib
+import sys
+
+# Free (personal) Apple teams cannot sign Sign in with Apple or push notifications. The committed project
+# builds with a free team; run with --paid-team once the account is in the Apple Developer Program.
+PAID_TEAM = '--paid-team' in sys.argv[1:]
 
 ROOT = Path(__file__).resolve().parents[1]
 IOS = ROOT / 'ios'
@@ -81,7 +86,10 @@ app_common = {
     'LD_RUNPATH_SEARCH_PATHS': ['$(inherited)', '@executable_path/Frameworks'], 'MARKETING_VERSION': '0.2.0',
     'PRODUCT_BUNDLE_IDENTIFIER': 'com.jeongmint.scoo', 'PRODUCT_NAME': '$(TARGET_NAME)',
     'SUPPORTED_PLATFORMS': 'iphoneos iphonesimulator', 'SUPPORTS_MACCATALYST': 'NO', 'TARGETED_DEVICE_FAMILY': '1',
-    'SWIFT_EMIT_LOC_STRINGS': 'YES', 'CODE_SIGN_ENTITLEMENTS': 'SCOO/Resources/SCOO.entitlements',
+    'SWIFT_EMIT_LOC_STRINGS': 'YES',
+    'CODE_SIGN_ENTITLEMENTS': 'SCOO/Resources/SCOO-Paid.entitlements' if PAID_TEAM else 'SCOO/Resources/SCOO.entitlements',
+    # Read by the app (Info.plist SCOOPaidTeam) to show the Apple login button only when it can work.
+    'SCOO_PAID_TEAM': 'YES' if PAID_TEAM else 'NO',
     # Supabase publishable (anon) key: public by design, protected by row level security. Never a secret key.
     'SUPABASE_ANON_KEY': 'sb_publishable_Jmnq2XZohnNY0VnR0X8geQ_LAYusEtr',
 }
