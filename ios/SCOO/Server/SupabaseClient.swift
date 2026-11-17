@@ -135,8 +135,9 @@ actor SupabaseClient {
         return .switched
     }
 
-    /// Asks Supabase for the provider's login page instead of being redirected to it, so a provider that is
-    /// switched off (or linking that is off) shows up as an error here rather than as a dead web page.
+    /// Asks Supabase for the provider's login page before opening it, so a provider that is switched off
+    /// (or linking that is off) shows up as an error here rather than as a dead web page.
+    /// Linking answers `{url}`; plain sign-in answers with a redirect, which is read but not followed.
     private func authorizeURL(_ path: String, provider: OAuthProvider, pkce: PKCE, bearer: String?) async throws -> URL {
         guard let key = SupabaseConfig.anonKey else { throw ServerError.notConfigured }
         var components = URLComponents(url: SupabaseConfig.url.appendingPathComponent("auth/v1/\(path)"), resolvingAgainstBaseURL: false)!
@@ -150,7 +151,11 @@ actor SupabaseClient {
         var request = URLRequest(url: components.url!)
         request.setValue(key, forHTTPHeaderField: "apikey")
         if let bearer { request.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization") }
-        let (data, response) = try await urlSession.data(for: request)
+        let (data, response) = try await urlSession.data(for: request, delegate: NoRedirects())
+        if let http = response as? HTTPURLResponse, (300..<400).contains(http.statusCode),
+           let location = http.value(forHTTPHeaderField: "Location"), let url = URL(string: location) {
+            return url
+        }
         try Self.check(response, data)
         struct Answer: Decodable { let url: URL }
         return try JSONDecoder().decode(Answer.self, from: data).url
@@ -294,6 +299,12 @@ actor SupabaseClient {
         plain.formatOptions = [.withInternetDateTime]
         return plain.date(from: value)
     }
+}
+
+/// Stops URLSession from following a redirect, so its Location can be read.
+private final class NoRedirects: NSObject, URLSessionTaskDelegate {
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest) async -> URLRequest? { nil }
 }
 
 /// One generic-password Keychain item, readable after the first unlock.

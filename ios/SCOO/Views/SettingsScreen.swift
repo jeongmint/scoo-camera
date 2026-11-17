@@ -19,6 +19,7 @@ struct SettingsScreen: View {
     @State private var email: String?
     @State private var provider: String?
     @State private var webLogin: OAuthProvider?
+    @State private var loginNote: String?
     @State private var appleNonce = ""
     @StateObject private var social = SocialStore()
     @StateObject private var locator = DistrictLocator()
@@ -51,6 +52,7 @@ struct SettingsScreen: View {
                 Section {
                     if SupabaseConfig.isConfigured {
                         LabeledContent("계정", value: accountLabel)
+                        if let loginNote { Text(loginNote).font(.footnote).foregroundStyle(Palette.moss) }
                         if accountID != nil && anonymous {
                             if SupabaseConfig.appleSignInAvailable {
                                 SignInWithAppleButton(.continue) { request in
@@ -159,15 +161,16 @@ struct SettingsScreen: View {
 
     private func finishWeb(_ option: OAuthProvider) async {
         webLogin = option
+        loginNote = nil
         defer { webLogin = nil }
         do {
             switch try await SupabaseClient.shared.signIn(with: option, browser: { try await WebLogin.open($0) }) {
-            case .linked: note = "\(option.title) 계정과 이어졌어요. 이제 앱을 지워도 그대로 남아요."
-            case .switched: note = "이 \(option.title) 계정에 있던 기존 계정으로 돌아왔어요."
+            case .linked: loginNote = "\(option.title) 계정과 이어졌어요. 이제 앱을 지워도 그대로 남아요."
+            case .switched: loginNote = "이 \(option.title) 계정에 있던 기존 계정으로 돌아왔어요."
             }
         } catch is WebLogin.Cancelled {
         } catch {
-            note = error.localizedDescription
+            loginNote = error.localizedDescription
         }
         await refreshAccount()
     }
@@ -175,20 +178,20 @@ struct SettingsScreen: View {
     private func finishApple(_ result: Result<ASAuthorization, Error>) async {
         switch result {
         case .failure(let error):
-            if (error as? ASAuthorizationError)?.code != .canceled { note = error.localizedDescription }
+            if (error as? ASAuthorizationError)?.code != .canceled { loginNote = error.localizedDescription }
         case .success(let authorization):
             guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
                   let tokenData = credential.identityToken, let token = String(data: tokenData, encoding: .utf8) else {
-                note = "Apple에서 로그인 정보를 받지 못했어요."
+                loginNote = "Apple에서 로그인 정보를 받지 못했어요."
                 return
             }
             do {
                 switch try await SupabaseClient.shared.signInWithApple(idToken: token, nonce: appleNonce) {
-                case .linked: note = "Apple 계정과 이어졌어요. 이제 앱을 지워도 그대로 남아요."
-                case .switched: note = "이 Apple 계정에 있던 기존 계정으로 돌아왔어요."
+                case .linked: loginNote = "Apple 계정과 이어졌어요. 이제 앱을 지워도 그대로 남아요."
+                case .switched: loginNote = "이 Apple 계정에 있던 기존 계정으로 돌아왔어요."
                 }
             } catch {
-                note = error.localizedDescription
+                loginNote = error.localizedDescription
             }
             await refreshAccount()
         }
