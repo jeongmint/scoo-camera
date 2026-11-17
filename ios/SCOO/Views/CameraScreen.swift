@@ -39,6 +39,8 @@ struct CameraScreen: View {
     @GestureState private var pressActive = false
     @State private var holdTask: Task<Void, Never>?
     @State private var pipeline = PhotoPipeline()
+    /// A friend met on the first photo in a new district (동네 탐험).
+    @State private var newFriend: NewFriend?
     @State private var expression: MoriExpression = .normal
     @State private var expressionTask: Task<Void, Never>?
     @State private var lastReaction: MoriExpression?
@@ -145,6 +147,7 @@ struct CameraScreen: View {
         .onDisappear { camera.stop(); toastTask?.cancel(); focusTask?.cancel(); expressionTask?.cancel() }
         .onChange(of: assignedRaw) { _, _ in WidgetBridge.refresh() }
         .onChange(of: companionRaw) { _, _ in WidgetBridge.refresh() }
+        .sheet(item: $newFriend) { meeting in NewFriendSheet(meeting: meeting) }
         .sheet(item: $sheet, onDismiss: {
             if scenePhase == .active && !importing { camera.start() }
         }) { value in
@@ -537,7 +540,17 @@ struct CameraScreen: View {
                 do { try await PhotoLibraryWriter.save(result.jpeg) }
                 catch { notify("앱에는 저장했어요. \(error.localizedDescription)") }
             }
+            if let place { await explore(place) }
         } catch { calmDown(); notify("저장하지 못했어요. \(error.localizedDescription)") }
+    }
+
+    /// 동네 탐험: the first photo in a Seoul district not visited yet meets that district's friend.
+    private func explore(_ place: PhotoLocation) async {
+        guard let district = await locator.district(at: place) else { return }
+        let drawn = Set(ownedCompanions.map(\.rawValue))
+        guard let friend = Exploration.record(district, owned: drawn) else { return }
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        newFriend = NewFriend(species: friend, district: district)
     }
 
     private func notify(_ message: String) {
@@ -579,5 +592,33 @@ private struct FloatingFriend: View {
             .rotationEffect(.degrees(floats ? (floating ? 2 : -2) : 0))
             .animation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true), value: floating)
             .onAppear { floating = true }
+    }
+}
+
+struct NewFriend: Identifiable {
+    let species: Species
+    let district: SeoulDistrict
+    var id: String { species.id }
+}
+
+/// Shown when the first photo in a new district meets someone.
+private struct NewFriendSheet: View {
+    let meeting: NewFriend
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("\(meeting.district.rawValue) 첫 방문!").font(.subheadline).foregroundStyle(.secondary)
+            SpeciesPortrait(species: meeting.species).frame(width: 200, height: 200)
+            Text("새 친구, \(meeting.species.name)").font(.title3.weight(.semibold))
+            Text("친구 도감에 들어갔고, 이제 교배할 때 부모로 고를 수 있어요.")
+                .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            Button("반가워!") { dismiss() }
+                .font(.headline).padding(.horizontal, 36).padding(.vertical, 12)
+                .background(Palette.moss, in: Capsule()).foregroundStyle(.white)
+        }
+        .padding(28)
+        .foregroundStyle(Palette.ink)
+        .presentationDetents([.medium])
+        .presentationBackground(Palette.cream)
     }
 }

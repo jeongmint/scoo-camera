@@ -16,7 +16,9 @@ struct BreedScreen: View {
 
     private enum Slot { case a, b }
 
-    private var owned: [Species] { Species.owned(assigned: Companion(rawValue: assignedRaw), unlockAll: unlockAll) }
+    private var owned: [Species] {
+        Species.owned(assigned: Companion(rawValue: assignedRaw), unlockAll: unlockAll, collected: Exploration.load().collected)
+    }
     private var problem: BreedRules.Problem? { BreedRules.problem(a: parentA, b: parentB, owned: owned) }
     private var moments: Int { garden.snapshot.moments }
 

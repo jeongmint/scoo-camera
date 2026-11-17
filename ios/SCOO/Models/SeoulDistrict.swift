@@ -75,3 +75,34 @@ extension Companion {
         return regulars.filter { $0 != district.primary }.randomElement(using: &generator) ?? district.primary
     }
 }
+
+extension SeoulDistrict {
+    /// The local character met on the first photo in this district (동네 탐험). First draft — edit freely.
+    /// Five districts have none; there a not-yet-met character turns up instead.
+    var special: Species? {
+        let id: String? = switch self {
+        case .dobong: "huu"           // 도봉산 부엉이
+        case .gwangjin: "chiko"       // 어린이대공원
+        case .nowon: "dochi"
+        case .gwanak: "luna"          // 낙성대, 별이 떨어진 곳
+        case .yongsan: "toto"
+        case .gangseo: "sunny"
+        case .gangdong: "suri"
+        case .seocho: "mellu"         // 양재 꽃·과일
+        case .jung: "riru"            // 시장 과일
+        case .jongno: "popo"          // 인사동 찻집
+        case .geumcheon: "tangerine"
+        case .songpa: "baseball"      // 잠실야구장
+        case .seongdong: "otter"      // 중랑천 수달
+        case .dongdaemun: "yarn"      // 동대문 원단시장
+        case .seongbuk: "tori"
+        case .eunpyeong: "mupu"       // 북한산 너구리
+        case .mapo: "deogi"           // 연남동 산책길
+        case .jungnang: "hechi"
+        case .yangcheon: "sia"
+        case .gangbuk: "dia"
+        case .seodaemun, .guro, .yeongdeungpo, .dongjak, .gangnam: nil
+        }
+        return id.flatMap(Species.find)
+    }
+}

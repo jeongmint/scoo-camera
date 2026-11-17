@@ -56,11 +56,12 @@ extension Species {
         self = match
     }
 
-    /// Who a user can breed with: the friend they were handed plus open event friends.
+    /// Who a user can breed with: the friend they were handed, open event friends, and friends met while exploring.
     /// The test switch opens the whole family so every pair can be tried.
-    static func owned(assigned: Companion?, unlockAll: Bool) -> [Species] {
+    static func owned(assigned: Companion?, unlockAll: Bool, collected: Set<String> = []) -> [Species] {
         if unlockAll { return all }
-        guard let assigned else { return [] }
-        return Companion.owned(assigned: assigned).compactMap { Species($0) }
+        let drawn = assigned.map { Companion.owned(assigned: $0).compactMap { Species($0) } } ?? []
+        let ids = Set(drawn.map(\.id))
+        return drawn + all.filter { collected.contains($0.id) && !ids.contains($0.id) }
     }
 }
