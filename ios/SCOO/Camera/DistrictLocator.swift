@@ -54,6 +54,18 @@ final class DistrictLocator: NSObject, ObservableObject, CLLocationManagerDelega
         }
     }
 
+    /// The Seoul district a photo was taken in (nil outside Seoul or when the geocoder cannot tell).
+    func district(at place: PhotoLocation) async -> SeoulDistrict? {
+        let location = CLLocation(latitude: place.latitude, longitude: place.longitude)
+        guard let marks = try? await CLGeocoder().reverseGeocodeLocation(location, preferredLocale: Locale(identifier: "ko_KR")) else {
+            return nil
+        }
+        let texts = marks.flatMap { mark in
+            [mark.subLocality, mark.locality, mark.subAdministrativeArea, mark.administrativeArea, mark.name, mark.thoroughfare]
+        }.compactMap { $0 }
+        return SeoulDistrict.match(in: texts)
+    }
+
     /// Where the user is right now, for the map guestbook: a recent fix if there is one, otherwise a quick new one.
     /// Never asks for permission (the first launch already did) and gives up after a few seconds.
     func quickLocation() async -> PhotoLocation? {
