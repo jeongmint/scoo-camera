@@ -12,6 +12,10 @@ enum SupabaseConfig {
         return key
     }
     static var isConfigured: Bool { anonKey != nil }
+    /// Kakao through the `kakao-login` function (email only, needs OpenID Connect at Kakao) instead of Supabase's
+    /// own Kakao login (which also asks for nickname and photo, so those consent items must be set). Off: the
+    /// Kakao app has all three consent items.
+    static let kakaoEmailOnly = false
     /// Sign in with Apple needs a paid Apple Developer team (see `generate_xcodeproj.py --paid-team`).
     static var appleSignInAvailable: Bool {
         (Bundle.main.object(forInfoDictionaryKey: "SCOOPaidTeam") as? String) == "YES"
@@ -148,7 +152,7 @@ actor SupabaseClient {
     /// account, or signs in to the account that login already has. `browser` shows a URL and returns the
     /// `scoo://auth-callback` it ends on (see `WebLogin.open`).
     func signIn(with provider: OAuthProvider, browser: @Sendable (URL) async throws -> URL) async throws -> LinkResult {
-        if provider == .kakao { return try await signInWithKakao(browser: browser) }
+        if provider == .kakao && SupabaseConfig.kakaoEmailOnly { return try await signInWithKakao(browser: browser) }
         let current = try await signIn()
         if current.isAnonymous ?? true {
             let pkce = PKCE()
