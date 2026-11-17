@@ -26,13 +26,15 @@ actor SupabaseClient {
         /// Added later; older stored sessions decode with nil (they were anonymous).
         var isAnonymous: Bool? = nil
         var email: String? = nil
+        /// The login attached to the account ("apple", "google", "kakao"); nil while anonymous or for older sessions.
+        var provider: String? = nil
     }
 
-    /// What Sign in with Apple did to the account on this device.
-    enum AppleResult: Equatable {
-        /// The anonymous account now has Apple attached: same friends, bottles and letters, kept for good.
+    /// What a login (Apple, Google, Kakao) did to the account on this device.
+    enum LinkResult: Equatable {
+        /// The anonymous account now has the login attached: same friends, bottles and letters, kept for good.
         case linked
-        /// That Apple ID already had an account (e.g. after reinstalling): this device now uses it.
+        /// That login already had an account (e.g. after reinstalling): this device now uses it.
         case switched
     }
 
@@ -55,7 +57,7 @@ actor SupabaseClient {
             case .http(_, let body) where body.contains("slow down"):
                 return "편지를 너무 빨리 보내고 있어요. 잠시 뒤에 보내 주세요."
             case .http(_, let body) where body.lowercased().contains("provider is not enabled") || body.contains("provider_disabled"):
-                return "서버에서 Apple 로그인이 아직 꺼져 있어요."
+                return "서버에서 이 로그인 방식이 아직 꺼져 있어요. Supabase의 Sign In / Providers에서 켜 주세요."
             case .http(_, let body) where body.lowercased().contains("manual linking"):
                 return "서버에서 계정 연결(manual linking)이 꺼져 있어요."
             case .http(429, _):
@@ -81,10 +83,16 @@ actor SupabaseClient {
     /// True while the account exists only on this device (no Apple ID attached).
     var isAnonymous: Bool { session?.isAnonymous ?? true }
     var email: String? { session?.email }
+    var provider: String? { session?.provider }
+
+    /// Login errors that mean "this Apple/Google/Kakao account already belongs to another SCOO account".
+    static func isAlreadyTaken(_ text: String) -> Bool {
+        text.contains("identity_already_exists") || text.lowercased().contains("already linked")
+    }
 
     /// Sign in with Apple: attaches Apple to the current anonymous account, or, if that Apple ID already
     /// belongs to an account, switches this device to it. `nonce` is the raw nonce whose SHA-256 went to Apple.
-    func signInWithApple(idToken: String, nonce: String) async throws -> AppleResult {
+    func signInWithApple(idToken: String, nonce: String) async throws -> LinkResult {
         let current = try await signIn()
         let body: [String: Any] = ["provider": "apple", "id_token": idToken, "nonce": nonce]
         if current.isAnonymous ?? true {
@@ -93,13 +101,67 @@ actor SupabaseClient {
             do {
                 _ = try await authenticate(path: "token?grant_type=id_token", body: linking, bearer: current.accessToken)
                 return .linked
-            } catch ServerError.http(_, let text) where text.contains("identity_already_exists") || text.contains("already linked") {
+            } catch ServerError.http(_, let text) where Self.isAlreadyTaken(text) {
                 // This Apple ID already has an account (e.g. made before reinstalling): fall through and sign in to it.
                 // Any other failure (linking switched off, bad token) is thrown, so the anonymous account is never left behind by accident.
             }
         }
         _ = try await authenticate(path: "token?grant_type=id_token", body: body)
         return .switched
+    }
+
+    /// Google or Kakao through the Supabase web login (PKCE). Like Apple: attaches the login to the anonymous
+    /// account, or signs in to the account that login already has. `browser` shows a URL and returns the
+    /// `scoo://auth-callback` it ends on (see `WebLogin.open`).
+    func signIn(with provider: OAuthProvider, browser: @Sendable (URL) async throws -> URL) async throws -> LinkResult {
+        let current = try await signIn()
+        if current.isAnonymous ?? true {
+            let pkce = PKCE()
+            let start = try await authorizeURL("user/identities/authorize", provider: provider, pkce: pkce, bearer: current.accessToken)
+            do {
+                try await exchange(try await browser(start), pkce: pkce)
+                return .linked
+            } catch ServerError.http(_, let text) where Self.isAlreadyTaken(text) {
+                // Same as Apple: that login already has an account, so sign in to it below.
+            }
+        }
+        let pkce = PKCE()
+        let start = try await authorizeURL("authorize", provider: provider, pkce: pkce, bearer: nil)
+        try await exchange(try await browser(start), pkce: pkce)
+        return .switched
+    }
+
+    /// Asks Supabase for the provider's login page instead of being redirected to it, so a provider that is
+    /// switched off (or linking that is off) shows up as an error here rather than as a dead web page.
+    private func authorizeURL(_ path: String, provider: OAuthProvider, pkce: PKCE, bearer: String?) async throws -> URL {
+        guard let key = SupabaseConfig.anonKey else { throw ServerError.notConfigured }
+        var components = URLComponents(url: SupabaseConfig.url.appendingPathComponent("auth/v1/\(path)"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [
+            URLQueryItem(name: "provider", value: provider.rawValue),
+            URLQueryItem(name: "redirect_to", value: OAuthCallback.redirect),
+            URLQueryItem(name: "code_challenge", value: pkce.challenge),
+            URLQueryItem(name: "code_challenge_method", value: "s256"),
+            URLQueryItem(name: "skip_http_redirect", value: "true"),
+        ]
+        var request = URLRequest(url: components.url!)
+        request.setValue(key, forHTTPHeaderField: "apikey")
+        if let bearer { request.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization") }
+        let (data, response) = try await urlSession.data(for: request)
+        try Self.check(response, data)
+        struct Answer: Decodable { let url: URL }
+        return try JSONDecoder().decode(Answer.self, from: data).url
+    }
+
+    /// Turns the `scoo://auth-callback?code=…` into a session.
+    private func exchange(_ callback: URL, pkce: PKCE) async throws {
+        switch OAuthCallback(callback) {
+        case .code(let code):
+            _ = try await authenticate(path: "token?grant_type=pkce", body: ["auth_code": code, "code_verifier": pkce.verifier])
+        case .failure(let code, let description):
+            throw ServerError.http(400, "\(code) \(description)")
+        case nil:
+            throw ServerError.http(0, "login callback without a code")
+        }
     }
 
     /// The signed-in session, creating an anonymous account on first use and refreshing an expiring token.
@@ -159,6 +221,8 @@ actor SupabaseClient {
                 let id: String
                 let is_anonymous: Bool?
                 let email: String?
+                struct Identity: Decodable { let provider: String }
+                let identities: [Identity]?
             }
             let access_token: String
             let refresh_token: String
@@ -168,7 +232,8 @@ actor SupabaseClient {
         let answer = try JSONDecoder().decode(Answer.self, from: data)
         let fresh = Session(accessToken: answer.access_token, refreshToken: answer.refresh_token,
                             expiresAt: Date().addingTimeInterval(answer.expires_in), userID: answer.user.id,
-                            isAnonymous: answer.user.is_anonymous ?? false, email: answer.user.email)
+                            isAnonymous: answer.user.is_anonymous ?? false, email: answer.user.email,
+                            provider: answer.user.identities?.first { $0.provider != "anonymous" }?.provider)
         session = fresh
         if let stored = try? JSONEncoder().encode(fresh) { keychain.write(stored) }
         return fresh

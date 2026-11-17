@@ -17,6 +17,8 @@ struct SettingsScreen: View {
     @State private var nickname = ""
     @State private var anonymous = true
     @State private var email: String?
+    @State private var provider: String?
+    @State private var webLogin: OAuthProvider?
     @State private var appleNonce = ""
     @StateObject private var social = SocialStore()
     @StateObject private var locator = DistrictLocator()
@@ -48,7 +50,7 @@ struct SettingsScreen: View {
                 }
                 Section {
                     if SupabaseConfig.isConfigured {
-                        LabeledContent("계정", value: accountID.map { id in anonymous ? "익명 · \(id.prefix(8))" : "Apple · \(email ?? String(id.prefix(8)))" } ?? "아직 연결 안 됨")
+                        LabeledContent("계정", value: accountLabel)
                         if accountID != nil && anonymous {
                             SignInWithAppleButton(.continue) { request in
                                 appleNonce = AppleNonce.make()
@@ -59,7 +61,20 @@ struct SettingsScreen: View {
                             }
                             .signInWithAppleButtonStyle(.black)
                             .frame(height: 44)
-                            Text("Apple로 이어 두면 앱을 지우거나 폰을 바꿔도 친구·유리병·편지가 그대로 남아요.")
+                            ForEach(OAuthProvider.allCases) { option in
+                                Button { Task { await finishWeb(option) } } label: {
+                                    Text(webLogin == option ? "\(option.title) 로그인 중…" : "\(option.title)로 계속하기")
+                                        .font(.body.weight(.semibold))
+                                        .frame(maxWidth: .infinity, minHeight: 44)
+                                        .foregroundStyle(option == .kakao ? Color.black.opacity(0.85) : Color.black)
+                                        .background(option == .kakao ? Color(red: 1, green: 0.898, blue: 0) : Color.white,
+                                                    in: RoundedRectangle(cornerRadius: 8))
+                                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.black.opacity(option == .google ? 0.2 : 0)))
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(webLogin != nil)
+                            }
+                            Text("Apple·Google·카카오 중 하나로 이어 두면 앱을 지우거나 폰을 바꿔도 친구·유리병·편지가 그대로 남아요.")
                                 .font(.caption2).foregroundStyle(.secondary)
                         }
                         if accountID == nil {
@@ -85,7 +100,7 @@ struct SettingsScreen: View {
                         Text("서버 키가 아직 없어서 유리병은 이 기기 안에서만 시험해요.").font(.footnote)
                     }
                 } header: { Text("계정 · 서버") } footer: {
-                    Text("로그인 없이 익명 계정으로 시작해요. 계정 정보는 이 iPhone의 키체인에 보관돼요. 끄면 유리병은 기기 안의 가짜 바다로 돌아가요.")
+                    Text("로그인 없이 익명 계정으로 시작해요. Apple·Google·카카오로 이어 두면 계정이 지켜져요. 계정 정보는 이 iPhone의 키체인에 보관돼요. 끄면 유리병은 기기 안의 가짜 바다로 돌아가요.")
                 }
                 .task { await refreshAccount() }
                 Section("Eternal") {
@@ -123,7 +138,31 @@ struct SettingsScreen: View {
         accountID = await client.currentUserID
         anonymous = await client.isAnonymous
         email = await client.email
+        provider = await client.provider
         if accountID != nil { await social.refresh() }
+    }
+
+    private var accountLabel: String {
+        guard let id = accountID else { return "아직 연결 안 됨" }
+        if anonymous { return "익명 · \(id.prefix(8))" }
+        let names = ["apple": "Apple", "google": "Google", "kakao": "카카오"]
+        let name = provider.flatMap { names[$0] } ?? "로그인"
+        return "\(name) · \(email ?? String(id.prefix(8)))"
+    }
+
+    private func finishWeb(_ option: OAuthProvider) async {
+        webLogin = option
+        defer { webLogin = nil }
+        do {
+            switch try await SupabaseClient.shared.signIn(with: option, browser: { try await WebLogin.open($0) }) {
+            case .linked: note = "\(option.title) 계정과 이어졌어요. 이제 앱을 지워도 그대로 남아요."
+            case .switched: note = "이 \(option.title) 계정에 있던 기존 계정으로 돌아왔어요."
+            }
+        } catch is WebLogin.Cancelled {
+        } catch {
+            note = error.localizedDescription
+        }
+        await refreshAccount()
     }
 
     private func finishApple(_ result: Result<ASAuthorization, Error>) async {

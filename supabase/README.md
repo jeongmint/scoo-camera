@@ -48,3 +48,38 @@
 | `send_message(to, body, sticker)`, `mark_read(friend)`, `list_friends()`, `my_messages` | 편지 보내기, 읽음, 친구 목록(마지막 편지·안 읽은 수), 대화 |
 
 `tests/friends_scenario.sql`로 로컬에서 요청·수락·편지·읽음·다른 사람 차단을 확인했어요.
+
+## 로그인 (Apple · Google · 카카오)
+
+앱은 익명 계정으로 시작하고, 설정의 **계정 · 서버**에서 Apple·Google·카카오 중 하나를 **지금 계정에 이어 붙여요**(친구·유리병·편지 그대로). 그 로그인에 이미 계정이 있으면(앱을 지웠다 다시 깐 경우 등) 그 계정으로 돌아가요.
+
+공통 (대시보드에서 한 번):
+
+1. **Authentication → Sign In / Providers → Allow manual linking**을 켜요. 꺼져 있으면 이어 붙이기가 `manual_linking_disabled`로 거절돼요(2026-11-17 확인 시 꺼져 있었어요).
+2. **Authentication → URL Configuration → Redirect URLs**에 `scoo://auth-callback`을 추가해요. 없으면 로그인 뒤 앱으로 돌아오지 못해요.
+
+모든 제공자의 콜백 주소는 `https://ofwexbasbwumfvswkixb.supabase.co/auth/v1/callback`이에요.
+
+**Apple** — Providers → Apple을 켜고 Client IDs에 번들 ID `com.jeongmint.scoo`를 넣어요. 앱은 iPhone의 기본 Apple 로그인 창을 써요(엔타이틀먼트 `com.apple.developer.applesignin`, 개발자 사이트의 App ID에서도 Sign in with Apple 체크).
+
+**Google**
+
+1. Google Cloud Console → APIs & Services → OAuth consent screen(앱 이름, 지원 이메일)을 만들어요.
+2. Credentials → Create credentials → OAuth client ID → **Web application**. Authorized redirect URIs에 위 콜백 주소를 넣어요.
+3. 나온 Client ID / Client Secret을 Supabase Providers → Google에 넣고 켜요.
+
+**카카오**
+
+1. [Kakao Developers](https://developers.kakao.com) → 앱 만들기.
+2. 앱 설정 → 앱 → 플랫폼 키 → **REST API 키**가 Client ID예요. 그 키를 눌러 **카카오 로그인 리다이렉트 URI**에 위 콜백 주소를 넣고, **카카오 로그인 Client Secret** 코드를 활성화해 Client Secret으로 써요.
+3. 제품 설정 → 카카오 로그인 → 일반에서 **사용 설정 ON**.
+4. 동의항목: 닉네임(`profile_nickname`), 프로필 사진(`profile_image`), 카카오계정 이메일(`account_email`). Supabase는 `account_email`을 항상 요청해서, 이 항목이 설정돼 있지 않으면 카카오가 `KOE205`로 거절해요. 이메일 동의항목은 비즈 앱에서만 열리니 앱 설정 → 일반에서 비즈 앱으로 전환해요(개인 개발자도 본인 인증으로 전환 가능).
+5. Supabase Providers → Kakao에 Client ID / Secret을 넣고 켜요. 이메일을 선택 동의로 두면 **Allow users without an email**도 켜요.
+
+앱은 PKCE 흐름이에요: `auth/v1/user/identities/authorize`(이어 붙이기, 로그인한 토큰 필요) 또는 `auth/v1/authorize`(로그인)에 `skip_http_redirect=true`로 로그인 주소를 받아 앱 안 Safari 창(`ASWebAuthenticationSession`)으로 열고, `scoo://auth-callback?code=…`를 `token?grant_type=pkce`로 세션과 바꿔요. 서버 키는 쓰지 않아요.
+
+## 알림 (`20261117000000_push`, `functions/push`)
+
+- 새 편지, 친구 요청·수락, 유리병 짝 찾기 때 트리거가 `pg_net`으로 `push` 함수를 불러 APNs로 보내요. 함수와 트리거는 Vault의 `push_hook_secret`을 공유해서 다른 사람은 부를 수 없어요.
+- 기기는 `register_push_token(token, environment)`로 토큰을 등록해요(`sandbox` = Xcode 개발 빌드, `production` = TestFlight·App Store).
+- **APNs 키**: Apple Developer → Keys → 새 키(Apple Push Notifications service) → `.p8` 다운로드. Edge Functions → Secrets에 `APNS_KEY`(.p8 파일 내용 전체), `APNS_KEY_ID`, `APNS_TEAM_ID`를 넣어요. 번들이 다르면 `APNS_TOPIC`. 키가 없으면 함수는 보내지 않고 `skipped`만 돌려줘요.
