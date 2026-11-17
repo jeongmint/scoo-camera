@@ -16,6 +16,7 @@
 <key>NSPhotoLibraryAddUsageDescription</key><string>완성한 빈티지 사진을 iPhone 사진 앱에 저장해요.</string>
 <key>NSSupportsLiveActivities</key><true/>
 <key>SupabaseAnonKey</key><string>$(SUPABASE_ANON_KEY)</string>
+<key>SCOOPaidTeam</key><string>$(SCOO_PAID_TEAM)</string>
 <key>UILaunchScreen</key><dict/>
 <key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string></array>
 <key>UIApplicationSupportsIndirectInputEvents</key><true/>

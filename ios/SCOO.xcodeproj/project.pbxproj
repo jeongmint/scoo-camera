@@ -304,6 +304,12 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "310B661D369EDB9D5ABAF641";
 		};
+		"F9E27E994F1340203DDE35E3" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "text.plist.entitlements";
+			"path" = "SCOO-Paid.entitlements";
+			"sourceTree" = "<group>";
+		};
 		"C0C753F943957C835356637D" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "text.plist.entitlements";
@@ -314,7 +320,7 @@
 			"isa" = "PBXGroup";
 			"path" = "Resources";
 			"sourceTree" = "<group>";
-			"children" = ("C1C5079CDFE55E8D440B1981", "6C9875BFC84789E4A16D0AF7", "310B661D369EDB9D5ABAF641", "C0C753F943957C835356637D");
+			"children" = ("C1C5079CDFE55E8D440B1981", "6C9875BFC84789E4A16D0AF7", "310B661D369EDB9D5ABAF641", "F9E27E994F1340203DDE35E3", "C0C753F943957C835356637D");
 		};
 		"843F7C0730D1D2AC18E2088C" = {
 			"isa" = "PBXFileReference";
@@ -796,6 +802,7 @@
 				"TARGETED_DEVICE_FAMILY" = "1";
 				"SWIFT_EMIT_LOC_STRINGS" = "YES";
 				"CODE_SIGN_ENTITLEMENTS" = "SCOO/Resources/SCOO.entitlements";
+				"SCOO_PAID_TEAM" = "NO";
 				"SUPABASE_ANON_KEY" = "sb_publishable_Jmnq2XZohnNY0VnR0X8geQ_LAYusEtr";
 				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
 				"DEBUG_INFORMATION_FORMAT" = "dwarf";
@@ -821,6 +828,7 @@
 				"TARGETED_DEVICE_FAMILY" = "1";
 				"SWIFT_EMIT_LOC_STRINGS" = "YES";
 				"CODE_SIGN_ENTITLEMENTS" = "SCOO/Resources/SCOO.entitlements";
+				"SCOO_PAID_TEAM" = "NO";
 				"SUPABASE_ANON_KEY" = "sb_publishable_Jmnq2XZohnNY0VnR0X8geQ_LAYusEtr";
 				"SWIFT_OPTIMIZATION_LEVEL" = "-O";
 				"DEBUG_INFORMATION_FORMAT" = "dwarf-with-dsym";

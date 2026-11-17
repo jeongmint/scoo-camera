@@ -87,3 +87,13 @@
 ## 랜덤 이름 (`20261117000100_random_nicknames`)
 
 새 계정은 `new_nickname()`이 지은 이름("졸린 모리", "반짝이는 실타래"처럼 형용사 18개 × 캐릭터 24개)으로 시작해요. 로그인 제공자에게서 이름을 받아오지 않아요. 설정에서 언제든 바꿀 수 있어요. 2026-11-17에 적용했고 이름이 없던 계정도 채웠어요.
+
+## 무료 Apple 개발자 계정(Personal Team)일 때
+
+무료 팀은 **Sign in with Apple**과 **원격 푸시 알림**을 서명할 수 없어요("Personal development teams … do not support the Sign In with Apple capability"). 그래서 저장소의 기본 프로젝트는 이 둘을 빼고 빌드하고, 설정 화면에서도 Apple 버튼을 숨겨요. Google·카카오 로그인은 무료 팀에서도 돼요.
+
+Apple Developer Program(유료)에 가입한 뒤에는 아래처럼 프로젝트를 다시 만들면 Apple 로그인이 켜져요(`SCOO-Paid.entitlements` 사용).
+
+```bash
+python3 scripts/generate_xcodeproj.py --paid-team
+```

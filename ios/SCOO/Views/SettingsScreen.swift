@@ -52,15 +52,17 @@ struct SettingsScreen: View {
                     if SupabaseConfig.isConfigured {
                         LabeledContent("계정", value: accountLabel)
                         if accountID != nil && anonymous {
-                            SignInWithAppleButton(.continue) { request in
-                                appleNonce = AppleNonce.make()
-                                request.requestedScopes = [.email]
-                                request.nonce = AppleNonce.sha256(appleNonce)
-                            } onCompletion: { result in
-                                Task { await finishApple(result) }
+                            if SupabaseConfig.appleSignInAvailable {
+                                SignInWithAppleButton(.continue) { request in
+                                    appleNonce = AppleNonce.make()
+                                    request.requestedScopes = [.email]
+                                    request.nonce = AppleNonce.sha256(appleNonce)
+                                } onCompletion: { result in
+                                    Task { await finishApple(result) }
+                                }
+                                .signInWithAppleButtonStyle(.black)
+                                .frame(height: 44)
                             }
-                            .signInWithAppleButtonStyle(.black)
-                            .frame(height: 44)
                             ForEach(OAuthProvider.allCases) { option in
                                 Button { Task { await finishWeb(option) } } label: {
                                     Text(webLogin == option ? "\(option.title) 로그인 중…" : "\(option.title)로 계속하기")
