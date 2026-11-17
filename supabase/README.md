@@ -73,7 +73,7 @@
 1. [Kakao Developers](https://developers.kakao.com) → 앱 만들기.
 2. 앱 설정 → 앱 → 플랫폼 키 → **REST API 키**가 Client ID예요. 그 키를 눌러 **카카오 로그인 리다이렉트 URI**에 위 콜백 주소를 넣고, **카카오 로그인 Client Secret** 코드를 활성화해 Client Secret으로 써요.
 3. 제품 설정 → 카카오 로그인 → 일반에서 **사용 설정 ON**.
-4. 동의항목: 닉네임(`profile_nickname`), 프로필 사진(`profile_image`), 카카오계정 이메일(`account_email`). Supabase는 `account_email`을 항상 요청해서, 이 항목이 설정돼 있지 않으면 카카오가 `KOE205`로 거절해요. 이메일 동의항목은 비즈 앱에서만 열리니 앱 설정 → 일반에서 비즈 앱으로 전환해요(개인 개발자도 본인 인증으로 전환 가능).
+4. 동의항목: 카카오계정 이메일(`account_email`, 비즈 앱에서만 열림), 닉네임(`profile_nickname`), 프로필 사진(`profile_image`). Supabase는 이 세 개를 **항상** 요청해서, 하나라도 "사용 안 함"이면 카카오가 `KOE205`로 거절해요. 앱은 닉네임·사진을 쓰지 않으니(이름은 서버가 랜덤으로 지어 줘요) 닉네임·사진은 **선택 동의**로 두고 동의 목적만 적으면 돼요.
 5. Supabase Providers → Kakao에 Client ID / Secret을 넣고 켜요. 이메일을 선택 동의로 두면 **Allow users without an email**도 켜요.
 
 앱은 PKCE 흐름이에요: `auth/v1/user/identities/authorize`(이어 붙이기, 로그인한 토큰 필요) 또는 `auth/v1/authorize`(로그인)에 `skip_http_redirect=true`로 로그인 주소를 받아 앱 안 Safari 창(`ASWebAuthenticationSession`)으로 열고, `scoo://auth-callback?code=…`를 `token?grant_type=pkce`로 세션과 바꿔요. 서버 키는 쓰지 않아요.
@@ -83,3 +83,7 @@
 - 새 편지, 친구 요청·수락, 유리병 짝 찾기 때 트리거가 `pg_net`으로 `push` 함수를 불러 APNs로 보내요. 함수와 트리거는 Vault의 `push_hook_secret`을 공유해서 다른 사람은 부를 수 없어요.
 - 기기는 `register_push_token(token, environment)`로 토큰을 등록해요(`sandbox` = Xcode 개발 빌드, `production` = TestFlight·App Store).
 - **APNs 키**: Apple Developer → Keys → 새 키(Apple Push Notifications service) → `.p8` 다운로드. Edge Functions → Secrets에 `APNS_KEY`(.p8 파일 내용 전체), `APNS_KEY_ID`, `APNS_TEAM_ID`를 넣어요. 번들이 다르면 `APNS_TOPIC`. 키가 없으면 함수는 보내지 않고 `skipped`만 돌려줘요.
+
+## 랜덤 이름 (`20261117000100_random_nicknames`)
+
+새 계정은 `new_nickname()`이 지은 이름("졸린 모리", "반짝이는 실타래"처럼 형용사 18개 × 캐릭터 24개)으로 시작해요. 로그인 제공자에게서 이름을 받아오지 않아요. 설정에서 언제든 바꿀 수 있어요. 2026-11-17에 적용했고 이름이 없던 계정도 채웠어요.
