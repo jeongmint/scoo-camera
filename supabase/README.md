@@ -68,15 +68,18 @@
 2. Credentials → Create credentials → OAuth client ID → **Web application**. Authorized redirect URIs에 위 콜백 주소를 넣어요.
 3. 나온 Client ID / Client Secret을 Supabase Providers → Google에 넣고 켜요.
 
-**카카오**
+**카카오** — Supabase 기본 카카오 로그인은 닉네임·프로필 사진을 항상 요청해서(동의항목이 없으면 `KOE205`), 앱은 대신 `functions/kakao-login`을 거쳐 **이메일만** 요청해요(OpenID Connect).
 
-1. [Kakao Developers](https://developers.kakao.com) → 앱 만들기.
-2. 앱 설정 → 앱 → 플랫폼 키 → **REST API 키**가 Client ID예요. 그 키를 눌러 **카카오 로그인 리다이렉트 URI**에 위 콜백 주소를 넣고, **카카오 로그인 Client Secret** 코드를 활성화해 Client Secret으로 써요.
-3. 제품 설정 → 카카오 로그인 → 일반에서 **사용 설정 ON**.
-4. 동의항목: 카카오계정 이메일(`account_email`, 비즈 앱에서만 열림), 닉네임(`profile_nickname`), 프로필 사진(`profile_image`). Supabase는 이 세 개를 **항상** 요청해서, 하나라도 "사용 안 함"이면 카카오가 `KOE205`로 거절해요. 앱은 닉네임·사진을 쓰지 않으니(이름은 서버가 랜덤으로 지어 줘요) 닉네임·사진은 **선택 동의**로 두고 동의 목적만 적으면 돼요.
-5. Supabase Providers → Kakao에 Client ID / Secret을 넣고 켜요. 이메일을 선택 동의로 두면 **Allow users without an email**도 켜요.
+1. [Kakao Developers](https://developers.kakao.com) → 앱 만들기. **REST API 키**가 Client ID예요.
+2. 카카오 로그인 **사용 설정 ON**, **OpenID Connect ON**(카카오 로그인 → 고급 또는 일반).
+3. 카카오 로그인 **리다이렉트 URI**에 `https://ofwexbasbwumfvswkixb.supabase.co/functions/v1/kakao-login`을 추가해요.
+4. 동의항목은 **카카오계정(이메일)** 만 있으면 돼요(비즈 앱에서 열림). 닉네임·사진은 꺼 둬도 돼요.
+5. **카카오 로그인 Client Secret**을 켰다면 같은 값을 Edge Functions → Secrets에 `KAKAO_CLIENT_SECRET`으로 넣어요. 꺼 두었다면 넣지 않아도 돼요.
+6. Supabase Providers → Kakao는 **켜 둔 채로** Client ID에 REST API 키를 둬요. 서버가 카카오 토큰을 이 키로 확인해요.
 
-앱은 PKCE 흐름이에요: `auth/v1/user/identities/authorize`(이어 붙이기, 로그인한 토큰 필요) 또는 `auth/v1/authorize`(로그인)에 `skip_http_redirect=true`로 로그인 주소를 받아 앱 안 Safari 창(`ASWebAuthenticationSession`)으로 열고, `scoo://auth-callback?code=…`를 `token?grant_type=pkce`로 세션과 바꿔요. 서버 키는 쓰지 않아요.
+흐름: 앱 → `kakao-login?nonce=<SHA-256>&state=…` → 카카오 로그인 → 함수가 코드를 OpenID 토큰으로 바꿔 `scoo://auth-callback?id_token=…`로 돌려줌 → 앱이 원래 nonce와 함께 `token?grant_type=id_token`(provider `kakao`)으로 계정에 이어 붙여요. 원래 nonce는 폰 밖으로 나가지 않아서, 토큰을 가로채도 쓸 수 없어요.
+
+Google은 PKCE 흐름이에요: `auth/v1/user/identities/authorize`(이어 붙이기, 로그인한 토큰 필요) 또는 `auth/v1/authorize`(로그인)에 `skip_http_redirect=true`로 로그인 주소를 받아 앱 안 Safari 창(`ASWebAuthenticationSession`)으로 열고, `scoo://auth-callback?code=…`를 `token?grant_type=pkce`로 세션과 바꿔요. 서버 키는 쓰지 않아요.
 
 ## 알림 (`20261117000000_push`, `functions/push`)
 

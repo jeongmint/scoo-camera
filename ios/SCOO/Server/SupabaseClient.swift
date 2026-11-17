@@ -64,6 +64,10 @@ actor SupabaseClient {
                 return "서버에서 이 로그인 방식이 아직 꺼져 있어요. Supabase의 Sign In / Providers에서 켜 주세요."
             case .http(_, let body) where body.lowercased().contains("manual linking"):
                 return "서버에서 계정 연결(manual linking)이 꺼져 있어요."
+            case .http(_, let body) where body.contains("kakao_oidc_off"):
+                return "카카오 앱에서 OpenID Connect를 켜 주세요. (카카오 로그인 → 고급)"
+            case .http(_, let body) where body.lowercased().contains("user email"):
+                return "로그인한 계정에서 이메일을 받지 못했어요. 이메일 제공에 동의해 주세요."
             case .http(429, _):
                 return "오늘은 새 그림을 충분히 그렸어요. 내일 또 그려 줄게요."
             case .http(_, let body) where body.lowercased().contains("anonymous sign-ins are disabled"):
@@ -97,8 +101,14 @@ actor SupabaseClient {
     /// Sign in with Apple: attaches Apple to the current anonymous account, or, if that Apple ID already
     /// belongs to an account, switches this device to it. `nonce` is the raw nonce whose SHA-256 went to Apple.
     func signInWithApple(idToken: String, nonce: String) async throws -> LinkResult {
+        try await signIn(provider: "apple", idToken: idToken, nonce: nonce)
+    }
+
+    /// An OpenID id_token from Apple or Kakao: linked to the anonymous account, or signed in to the account
+    /// that login already has.
+    private func signIn(provider: String, idToken: String, nonce: String) async throws -> LinkResult {
         let current = try await signIn()
-        let body: [String: Any] = ["provider": "apple", "id_token": idToken, "nonce": nonce]
+        let body: [String: Any] = ["provider": provider, "id_token": idToken, "nonce": nonce]
         if current.isAnonymous ?? true {
             var linking = body
             linking["link_identity"] = true
@@ -106,7 +116,7 @@ actor SupabaseClient {
                 _ = try await authenticate(path: "token?grant_type=id_token", body: linking, bearer: current.accessToken)
                 return .linked
             } catch ServerError.http(_, let text) where Self.isAlreadyTaken(text) {
-                // This Apple ID already has an account (e.g. made before reinstalling): fall through and sign in to it.
+                // This login already has an account (e.g. made before reinstalling): fall through and sign in to it.
                 // Any other failure (linking switched off, bad token) is thrown, so the anonymous account is never left behind by accident.
             }
         }
@@ -114,10 +124,31 @@ actor SupabaseClient {
         return .switched
     }
 
+    /// Kakao goes through the `kakao-login` function, which asks Kakao only for the email (OpenID Connect).
+    /// Supabase's own Kakao login always asks for nickname and photo too, which Kakao refuses (KOE205)
+    /// unless those consent items are set up.
+    private func signInWithKakao(browser: @Sendable (URL) async throws -> URL) async throws -> LinkResult {
+        let nonce = AppleNonce.make(), state = AppleNonce.make()
+        var components = URLComponents(url: SupabaseConfig.url.appendingPathComponent("functions/v1/kakao-login"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "nonce", value: AppleNonce.sha256(nonce)), URLQueryItem(name: "state", value: state)]
+        let callback = try await browser(components.url!)
+        let items = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        func value(_ name: String) -> String? { items.first { $0.name == name }?.value }
+        if let error = value("error") {
+            if error == "access_denied" { throw WebLogin.Cancelled() }
+            throw ServerError.http(400, "\(error) \(value("error_description") ?? "")")
+        }
+        guard value("state") == state, let idToken = value("id_token") else {
+            throw ServerError.http(0, "kakao login callback without a token")
+        }
+        return try await signIn(provider: "kakao", idToken: idToken, nonce: nonce)
+    }
+
     /// Google or Kakao through the Supabase web login (PKCE). Like Apple: attaches the login to the anonymous
     /// account, or signs in to the account that login already has. `browser` shows a URL and returns the
     /// `scoo://auth-callback` it ends on (see `WebLogin.open`).
     func signIn(with provider: OAuthProvider, browser: @Sendable (URL) async throws -> URL) async throws -> LinkResult {
+        if provider == .kakao { return try await signInWithKakao(browser: browser) }
         let current = try await signIn()
         if current.isAnonymous ?? true {
             let pkce = PKCE()
