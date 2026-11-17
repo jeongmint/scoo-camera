@@ -102,3 +102,10 @@ Apple Developer Program(유료)에 가입한 뒤에는 아래처럼 프로젝트
 ```bash
 python3 scripts/generate_xcodeproj.py --paid-team
 ```
+
+## 대화 모드 (`functions/pet-chat`, `20261117000200_pet_talk`)
+
+- 카메라의 말풍선 버튼 → 떠 있는 친구와 음성으로 티키타카. 목소리는 iPhone에서 글자로 바뀌고(가능하면 기기 안 인식), 그 글자만 `pet-chat`으로 가요.
+- `pet-chat`은 OpenAI(`gpt-5.4-mini`, 추론 없음, 2026-11-17 기준 약 1초)로 한두 문장 반말 대답과 표정(`smile|surprised|awe|yum|normal`)을 JSON으로 돌려줘요. 위험한 말에는 109·112·119 안내를 하도록 프롬프트에 넣었어요.
+- 로그인한 계정만, 하루 300번(`PET_CHAT_DAILY_LIMIT`). 대화 내용은 저장하지 않고 `pet_talk_usage`에 하루 횟수만 세요. 모델은 `PET_CHAT_MODEL`, 추론 정도는 `PET_CHAT_REASONING` 비밀값으로 바꿀 수 있어요.
+- 서버가 6초 안에 답하지 않거나 설정에서 'AI로 대답하기'를 끄면 앱 안의 간단한 대답(`LocalReplies`)으로 받아쳐요.

@@ -44,6 +44,10 @@ struct CameraScreen: View {
     @State private var expression: MoriExpression = .normal
     @State private var expressionTask: Task<Void, Never>?
     @State private var lastReaction: MoriExpression?
+    /// Voice talk mode (음성 대화, 티키타카).
+    @StateObject private var talk = PetTalkSession()
+    /// Talk replies from the server (text only); off = built-in lines only.
+    @AppStorage("talkOnline") private var talkOnline = true
 
     private enum CameraSheet: String, Identifiable {
         case album, garden, settings, map
@@ -58,6 +62,12 @@ struct CameraScreen: View {
     /// The friend to shoot together with; nil means shooting alone.
     private var companion: Companion? { Companion(rawValue: companionRaw).flatMap { ownedCompanions.contains($0) ? $0 : nil } }
     private var moriSize: CGFloat { min(105, 78 + CGFloat(sqrt(Double(max(0, garden.snapshot.experience)))) * 0.3) }
+    /// Who answers in talk mode: the floating friend, with the personality grown from the photos.
+    private var talkPet: TalkPet {
+        TalkPet.of(companion, moriName: garden.snapshot.name, personality: Personality.of(garden.snapshot.photos).title)
+    }
+    /// While talking, the friend wears the face of what it says.
+    private var face: MoriExpression { talk.phase == .speaking ? talk.mood : expression }
 
     var body: some View {
         GeometryReader { geometry in
@@ -71,8 +81,10 @@ struct CameraScreen: View {
                     RoundedRectangle(cornerRadius: 3).stroke(.yellow.opacity(0.9), lineWidth: 1)
                         .frame(width: 54, height: 54).position(focusPoint).allowsHitTesting(false)
                 }
+                if talk.isOn { TalkGlow(color: talkPet.color, level: talk.level, phase: talk.phase).transition(.opacity) }
                 chrome(insets: insets)
                 floatingMori(size: size, insets: insets)
+                if talk.isOn { talkBubble(size: size, insets: insets) }
                 if shutterFlash { Color.white.opacity(0.8).allowsHitTesting(false) }
                 if let toast {
                     Text(toast).font(.system(size: 12, weight: .medium)).multilineTextAlignment(.center)
@@ -114,9 +126,9 @@ struct CameraScreen: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active && sheet == nil && !importing { camera.start() }
-            else { camera.stop(); focusTask?.cancel() }
+            else { camera.stop(); focusTask?.cancel(); talk.stop() }
         }
-        .onChange(of: sheet) { _, value in if value != nil { camera.stop() } }
+        .onChange(of: sheet) { _, value in if value != nil { camera.stop(); talk.stop() } }
         .onChange(of: importing) { _, value in
             if value { camera.stop() }
             else if scenePhase == .active && sheet == nil { camera.start() }
@@ -144,7 +156,10 @@ struct CameraScreen: View {
         }
         .onChange(of: camera.errorMessage) { _, error in if let error { notify(error) } }
         .onChange(of: garden.message) { _, error in if let error { notify(error); garden.message = nil } }
-        .onDisappear { camera.stop(); toastTask?.cancel(); focusTask?.cancel(); expressionTask?.cancel() }
+        .onDisappear { camera.stop(); toastTask?.cancel(); focusTask?.cancel(); expressionTask?.cancel(); talk.stop() }
+        .onChange(of: talk.problem) { _, problem in if let problem { notify(problem); talk.problem = nil } }
+        .onChange(of: companionRaw) { _, _ in talk.update(talkPet) }
+        .animation(.easeInOut(duration: 0.35), value: talk.isOn)
         .onChange(of: assignedRaw) { _, _ in WidgetBridge.refresh() }
         .onChange(of: companionRaw) { _, _ in WidgetBridge.refresh() }
         .sheet(item: $newFriend) { meeting in NewFriendSheet(meeting: meeting) }
@@ -192,6 +207,12 @@ struct CameraScreen: View {
                 Text("Eternal").font(.system(size: 25, weight: .regular, design: .serif)).italic()
                     .accessibilityLabel("Eternal 필터")
                 Spacer()
+                Button { toggleTalk() } label: {
+                    Image(systemName: talk.isOn ? "waveform.circle.fill" : "bubble.left.and.text.bubble.right")
+                        .symbolEffect(.variableColor.iterative, isActive: talk.phase == .listening)
+                        .frame(width: 44, height: 44)
+                }.disabled(!garden.ready)
+                    .accessibilityLabel(talk.isOn ? "대화 끝내기" : "\(talkPet.name)랑 이야기하기")
                 Button { flash.toggle() } label: {
                     Image(systemName: flash ? "bolt.fill" : "bolt.slash").frame(width: 44, height: 44)
                 }.disabled(blocked || !camera.hasFlash).opacity(camera.hasFlash ? 1 : 0.35)
@@ -217,7 +238,7 @@ struct CameraScreen: View {
             }.padding(.horizontal, 22)
             Spacer(minLength: 0)
             if !moveHintSeen {
-                Text("모리를 눌러 찰칵 · 아래로 쓸면 동영상 · 꾹 눌러 이동")
+                Text("모리를 눌러 찰칵 · 아래로 쓸면 동영상 · 꾹 눌러 이동 · 말풍선을 누르면 대화")
                     .font(.system(size: 10, weight: .medium)).padding(.bottom, 17)
                     .allowsHitTesting(false)
             }
@@ -340,10 +361,10 @@ struct CameraScreen: View {
         return ZStack {
             Group {
                 if let companion {
-                    FloatingFriend(assetName: companion.assetName, size: moriSize, expression: expression, floats: !moving)
+                    FloatingFriend(assetName: companion.assetName, size: moriSize, expression: face, floats: !moving)
                 } else {
                     MarimoView(size: moriSize, happy: processing || camera.isCapturing,
-                               expression: expression == .normal ? nil : expression, floats: !moving)
+                               expression: face == .normal ? nil : face, floats: !moving)
                 }
             }
             .shadow(color: .black.opacity(0.35), radius: 9, y: 7)
@@ -429,6 +450,31 @@ struct CameraScreen: View {
             assignedRaw = friend.rawValue
             notify("새 친구 도착! \(friend.title) · \(failure.reason) 이번엔 랜덤으로 왔어요.")
         }
+    }
+
+    // MARK: Talk (음성 대화)
+
+    private func toggleTalk() {
+        if talk.isOn {
+            talk.stop()
+            return
+        }
+        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+        talk.useServer = talkOnline
+        let pet = talkPet
+        notify("\(pet.name)랑 이야기 중 · 말풍선을 다시 누르면 끝나요")
+        Task { await talk.start(pet) }
+    }
+
+    /// The bubble sits above the friend, kept on screen; when the friend floats near the top it goes below.
+    private func talkBubble(size: CGSize, insets: EdgeInsets) -> some View {
+        let spot = placement(MoriPlacement(x: savedMoriX, y: savedMoriY), size: size, insets: insets)
+        let above = spot.y - moriSize / 2 - 56 > insets.top + 110
+        return TalkBubble(name: talkPet.name, phase: talk.phase, heard: talk.heard, reply: talk.reply, color: talkPet.color)
+            .frame(width: min(260, size.width - 32))
+            .position(x: min(max(spot.x, 146), size.width - 146),
+                      y: above ? spot.y - moriSize / 2 - 50 : spot.y + moriSize / 2 + 50)
+            .allowsHitTesting(false)
     }
 
     // MARK: Video
