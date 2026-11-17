@@ -68,7 +68,9 @@
 2. Credentials → Create credentials → OAuth client ID → **Web application**. Authorized redirect URIs에 위 콜백 주소를 넣어요.
 3. 나온 Client ID / Client Secret을 Supabase Providers → Google에 넣고 켜요.
 
-**카카오** — Supabase 기본 카카오 로그인은 닉네임·프로필 사진을 항상 요청해서(동의항목이 없으면 `KOE205`), 앱은 대신 `functions/kakao-login`을 거쳐 **이메일만** 요청해요(OpenID Connect).
+**카카오** — 지금 앱은 Supabase 기본 카카오 로그인을 써요(PKCE, Google과 같은 흐름). 그래서 카카오 앱에 동의항목 **이메일·닉네임·프로필 사진**이 모두 있어야 해요(없으면 `KOE205`). 카카오 로그인 리다이렉트 URI는 `https://ofwexbasbwumfvswkixb.supabase.co/auth/v1/callback`, Supabase Providers → Kakao에 REST API 키와 Client Secret.
+
+닉네임·사진 없이 이메일만 받고 싶으면 `SupabaseConfig.kakaoEmailOnly = true`로 바꾸면 `functions/kakao-login`(배포돼 있음)을 거쳐요. 이때 필요한 설정:
 
 1. [Kakao Developers](https://developers.kakao.com) → 앱 만들기. **REST API 키**가 Client ID예요.
 2. 카카오 로그인 **사용 설정 ON**, **OpenID Connect ON**(카카오 로그인 → 고급 또는 일반).
