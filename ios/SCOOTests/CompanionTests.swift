@@ -31,8 +31,17 @@ final class CompanionTests: XCTestCase {
         XCTAssertFalse(draws.contains("happy"))
         let anywhere = (0..<400).map { _ in Regions.randomStarter(using: &generator) }
         XCTAssertFalse(anywhere.contains { $0.isEvent })
-        XCTAssertEqual(Species.regulars.count, 24)
-        XCTAssertEqual(Species.openEvents, ["happy"])
+        XCTAssertEqual(Species.regulars.count, 28)
+    }
+
+    func testOneSeasonalFriendPerSeason() {
+        func day(_ month: Int) -> Date { DateComponents(calendar: .current, year: 2026, month: month, day: 15).date! }
+        XCTAssertEqual(Species.openEvents(at: day(1)), ["happy"])
+        XCTAssertEqual(Species.openEvents(at: day(4)), ["bomi"])
+        XCTAssertEqual(Species.openEvents(at: day(7)), ["soru"])
+        XCTAssertEqual(Species.openEvents(at: day(11)), ["doto"])
+        XCTAssertEqual(Species.openEvents(at: day(12)), ["happy"])
+        XCTAssertEqual(Season.allCases.map { Season.of(day([4, 7, 10, 1][Season.allCases.firstIndex(of: $0)!])) }, Season.allCases)
     }
 
     func testSpotIsASquareAroundTheFloatingCenter() {

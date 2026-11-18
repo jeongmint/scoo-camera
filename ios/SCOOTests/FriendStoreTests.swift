@@ -82,4 +82,20 @@ final class FriendStoreTests: XCTestCase {
             XCTAssertTrue(again.isEmpty, "한 번만")
         }
     }
+
+    func testTheSeaAnswersWithTheFriendsOfWhereTheBottleLeft() async throws {
+        let store = FriendStore(defaults: try defaults())
+        store.setStarter(Species.find("mori")!, origin: "서울 마포구")
+        store.add(Species.find("kuru")!, how: .adopted, origin: nil)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let bottles = BottleStore(directory: directory, luck: { _ in false })   // nobody at sea
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        try await bottles.send(store.friends[1], wantsNews: false, from: "전북 무주군", friends: store, babies: 0, fast: false, now: start)
+        XCTAssertEqual(bottles.bottles.first?.origin, "전북 무주군")
+        let came = await bottles.settleWaiting(home: Regions.find("서울 마포구"), friends: store, fast: false,
+                                               now: start.addingTimeInterval(86_401))
+        XCTAssertEqual(came.count, 1)
+        XCTAssertTrue(Regions.find("전북 무주군")!.candidates.contains(came[0].id), "무주에서 띄우면 무주의 다섯 친구 중 하나")
+        XCTAssertEqual(store.friends.last?.origin, "전북 무주군")
+    }
 }

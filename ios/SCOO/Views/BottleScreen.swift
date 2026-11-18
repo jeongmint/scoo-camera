@@ -9,6 +9,9 @@ struct BottleScreen: View {
     @StateObject private var breeds = BreedStore()
     @StateObject private var bottles = BottleStore.preferred()
     @ObservedObject private var friends = FriendStore.shared
+    @StateObject private var locator = DistrictLocator()
+    /// Where the user is now: a bottle sent from here brings this place's friends if nobody swaps.
+    @State private var here: Region?
     @AppStorage("bottleFastMode") private var fast = false
     @AppStorage("district") private var districtRaw = ""
     /// A character (OwnedFriend id) or a baby (Breed id).
@@ -44,6 +47,7 @@ struct BottleScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { breeds.load() }
         .task {
+            if let spot = await locator.quickLocation() { here = await locator.region(at: spot) }
             await bottles.load()
             await settle()
             // Online, bottles can be matched by other people at any time: look again every half minute.
@@ -154,6 +158,18 @@ struct BottleScreen: View {
                         }
                     }
                 }
+                if let place = here ?? Regions.resolve(districtRaw) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("\(place.title)에서 띄워요 · 짝이 없으면 이 동네 친구 중 하나가 와요").font(.caption)
+                        HStack(spacing: 6) {
+                            ForEach(place.candidateSpecies) { species in
+                                SpeciesPortrait(species: species).frame(width: 30, height: 30)
+                                    .opacity(friends.owns(species.id) ? 0.4 : 1)
+                            }
+                        }
+                    }
+                    .foregroundStyle(.secondary)
+                }
                 Toggle("가끔 소식 전해줘", isOn: $wantsNews).font(.subheadline).tint(Palette.moss)
                 Button { sendPicked(now) } label: {
                     Label("유리병에 담아 띄우기", systemImage: "water.waves").font(.headline)
@@ -188,7 +204,7 @@ struct BottleScreen: View {
         guard let id = picked else { return }
         Task {
             do {
-                let from = districtRaw.isEmpty ? nil : districtRaw
+                let from = here?.id ?? (districtRaw.isEmpty ? nil : districtRaw)
                 if let friend = friends.friends.first(where: { $0.id == id }) {
                     try await bottles.send(friend, wantsNews: wantsNews, from: from, friends: friends, babies: breeds.breeds.count,
                                            fast: fast, now: now)

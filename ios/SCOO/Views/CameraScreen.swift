@@ -477,7 +477,7 @@ struct CameraScreen: View {
         districtRaw = region?.id ?? ""
         assignedRaw = friend.id
         friends.setStarter(friend, origin: region?.title)
-        for event in Species.openEvents where !friends.owns(event) {
+        for event in Species.openEvents() where !friends.owns(event) {
             if let species = Species.find(event) { friends.add(species, how: .event, origin: nil) }
         }
     }
