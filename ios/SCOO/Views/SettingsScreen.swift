@@ -13,6 +13,7 @@ struct SettingsScreen: View {
     @AppStorage("bottleFastMode") private var bottleFast = false
     @AppStorage("bottleOnline") private var bottleOnline = true
     @AppStorage("talkOnline") private var talkOnline = true
+    @AppStorage("localAlerts") private var localAlerts = true
     @State private var accountID: String?
     @State private var connecting = false
     @State private var nickname = ""
@@ -109,6 +110,12 @@ struct SettingsScreen: View {
                 }
                 .task { await refreshAccount() }
                 Section {
+                    Toggle("유리병·편지 알림", isOn: $localAlerts)
+                        .onChange(of: localAlerts) { _, on in Task { await updateAlerts(on) } }
+                } header: { Text("알림") } footer: {
+                    Text("유리병이 도착할 때와 보낸 아기가 편지를 쓸 때 알려 줘요. 이 iPhone이 스스로 맞춰 두는 알림이라 서버를 거치지 않아요. 새 친구 편지·친구 요청 알림은 다음 업데이트에서 와요.")
+                }
+                Section {
                     Toggle("AI로 대답하기", isOn: $talkOnline)
                 } header: { Text("대화 모드") } footer: {
                     Text("카메라 위쪽 말풍선을 누르면 떠 있는 친구와 목소리로 이야기해요. 목소리는 iPhone에서 글자로 바뀌고, 녹음은 남기지 않아요. ‘AI로 대답하기’를 켜면 그 글자만 서버를 거쳐 OpenAI로 보내 대답을 만들고, 대화 내용은 저장하지 않아요. 끄면 앱 안의 간단한 대답만 해요.")
@@ -133,6 +140,13 @@ struct SettingsScreen: View {
                 .navigationTitle("작은 설정").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("완료") { dismiss() } } }
         }
+    }
+
+    private func updateAlerts(_ on: Bool) async {
+        guard on else { await LocalNotifier.cancelAll(); return }
+        await LocalNotifier.askIfNeeded()
+        let bottles = BottleStore.preferred()
+        if !bottles.isOnline || accountID != nil { await bottles.load() }
     }
 
     private func connect() async {

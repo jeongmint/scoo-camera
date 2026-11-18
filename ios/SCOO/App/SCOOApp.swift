@@ -1,15 +1,27 @@
 import SwiftUI
+import UserNotifications
 
 @main
 @MainActor
 struct SCOOApp: App {
     @StateObject private var garden = GardenStore()
+
+    init() {
+        UNUserNotificationCenter.current().delegate = NotificationPresenter.shared
+    }
+
     var body: some Scene {
         WindowGroup {
             CameraScreen()
                 .environmentObject(garden)
                 .preferredColorScheme(.light)
-                .task { await garden.load() }
+                .task {
+                    await garden.load()
+                    // Reschedule bottle notifications at launch (loading the bottles does it). Online, only for an
+                    // account that already exists: launching the app must not create one.
+                    let bottles = BottleStore.preferred()
+                    if !bottles.isOnline || (await SupabaseClient.shared.currentUserID) != nil { await bottles.load() }
+                }
         }
     }
 }

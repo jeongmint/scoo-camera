@@ -53,12 +53,17 @@ enum BottleRules {
     static func letters(for bottles: [Bottle], now: Date, fast: Bool) -> [BottleLetter] {
         bottles.filter { $0.direction == .outgoing && $0.wantsNews }.flatMap { bottle -> [BottleLetter] in
             (0..<maxLetters).compactMap { index in
-                let date = bottle.arrivesAt.addingTimeInterval(letterGap(fast: fast) * Double(index) + (fast ? 30 : 6 * 60 * 60))
+                let date = letterDate(bottle, index: index, fast: fast)
                 guard date <= now else { return nil }
                 return BottleLetter(id: "\(bottle.id)-\(index)", bottle: bottle, date: date, text: letterText(bottle, index: index))
             }
         }
         .sorted { $0.date > $1.date }
+    }
+
+    /// When letter `index` (0..<maxLetters) of an adopted baby comes back: a few hours after arrival, then every gap.
+    static func letterDate(_ bottle: Bottle, index: Int, fast: Bool) -> Date {
+        bottle.arrivesAt.addingTimeInterval(letterGap(fast: fast) * Double(index) + (fast ? 30 : 6 * 60 * 60))
     }
 
     /// The same bottle always tells the same story, in the same order.
