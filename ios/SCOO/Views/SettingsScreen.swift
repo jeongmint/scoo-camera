@@ -40,32 +40,93 @@ struct SettingsScreen: View {
                 }
                 .task { await refreshAccount() }
                 Section {
-                    Toggle("날짜 인쇄", isOn: $dateStamp)
-                    Toggle("사진 앱에도 자동 저장", isOn: $autoSave)
-                    Toggle("찍은 자리를 지도에 남기기", isOn: $savePlace)
-                } header: { Text("카메라") } footer: { Text("앱 앨범에는 항상 저장해요.") }
-                Section {
-                    Toggle("유리병·편지 알림", isOn: $localAlerts)
-                        .onChange(of: localAlerts) { _, on in Task { await updateAlerts(on) } }
-                    Toggle("친구와 AI로 대화하기", isOn: $talkOnline)
-                    LabeledContent("이 iPhone의 대답", value: OnDeviceReplies.isAvailable ? "기기 안 AI (무료)" : (talkOnline ? "서버 AI" : "앱 안 대답"))
+                    row("카메라", icon: "camera.fill", color: Palette.moss, value: dateStamp ? "날짜 인쇄" : "") { cameraPage }
                     if SupabaseConfig.isConfigured {
-                        Toggle("유리병을 진짜 사람들과 주고받기", isOn: $bottleOnline)
-                        Toggle("입양한 아기 편지에 사진 주제 보내기", isOn: $shareMoments)
+                        row("유리병 · 편지", icon: "envelope.fill", color: .blue, value: bottleOnline ? "진짜 사람들" : "가짜 바다") { bottlePage }
                     }
-                } header: { Text("친구 · 유리병") } footer: {
-                    Text("사진은 서버로 보내지 않아요. 자세한 건 ‘SCOO 안내’에 있어요.")
+                    row("대화", icon: "bubble.left.fill", color: .orange, value: replyLabel) { talkPage }
+                    row("알림", icon: "bell.fill", color: .red, value: localAlerts ? "켬" : "끔") { alertsPage }
                 }
                 Section {
-                    NavigationLink("SCOO 안내") { guide }
-                    NavigationLink("개인정보 처리방침") { PrivacyScreen() }
-                    NavigationLink("테스트 도구") { testTools }
+                    row("SCOO 안내", icon: "book.fill", color: .gray) { guide }
+                    row("개인정보 처리방침", icon: "lock.fill", color: .gray) { PrivacyScreen() }
                     Button("iPhone 설정 열기") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
+                }
+                Section {
+                    row("테스트 도구", icon: "testtube.2", color: Color(white: 0.7)) { testTools }
                 }
                 Section { HStack { Text("SCOO").font(.headline); Spacer(); Text("0.2 · Eternal").font(.caption2).foregroundStyle(.secondary) } }
             }.scrollContentBackground(.hidden).background(Palette.cream).tint(Palette.moss)
                 .navigationTitle("작은 설정").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("완료") { dismiss() } } }
+        }
+    }
+
+    private func row<Destination: View>(_ title: String, icon: String, color: Color, value: String = "",
+                                        @ViewBuilder destination: @escaping () -> Destination) -> some View {
+        NavigationLink(destination: destination) {
+            HStack(spacing: 12) {
+                Image(systemName: icon).font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
+                    .frame(width: 30, height: 30).background(color, in: RoundedRectangle(cornerRadius: 8))
+                Text(title).foregroundStyle(Palette.ink)
+                Spacer()
+                Text(value).font(.subheadline).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var replyLabel: String {
+        OnDeviceReplies.isAvailable ? "기기 안 AI" : (talkOnline ? "서버 AI" : "앱 안 대답")
+    }
+
+    private func page<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        Form { content() }
+            .scrollContentBackground(.hidden).background(Palette.cream).tint(Palette.moss)
+            .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var cameraPage: some View {
+        page("카메라") {
+            Section {
+                Toggle("날짜 인쇄", isOn: $dateStamp)
+            } footer: { Text("사진 오른쪽 아래에 찍은 날짜를 새겨요.") }
+            Section {
+                Toggle("사진 앱에도 자동 저장", isOn: $autoSave)
+            } footer: { Text("앱 앨범에는 항상 저장해요. 켜면 다음 촬영 후 사진 추가 권한을 물어봐요.") }
+            Section {
+                Toggle("찍은 자리를 지도에 남기기", isOn: $savePlace)
+            } footer: { Text("위치는 이 iPhone 안에만 저장돼 지도 방명록에 보여요.") }
+        }
+    }
+
+    private var bottlePage: some View {
+        page("유리병 · 편지") {
+            Section {
+                Toggle("진짜 사람들과 주고받기", isOn: $bottleOnline)
+            } footer: { Text("끄면 유리병은 이 iPhone 안의 가짜 바다로 돌아가요.") }
+            Section {
+                Toggle("아기 편지에 사진 주제 넣기", isOn: $shareMoments)
+            } footer: { Text("입양한 아기가 처음 편지를 쓸 때 ‘하늘·고양이·꽃’ 같은 정해진 단어만 들어가요. 사진은 보내지 않아요.") }
+        }
+    }
+
+    private var talkPage: some View {
+        page("대화") {
+            Section {
+                LabeledContent("이 iPhone의 대답", value: OnDeviceReplies.isAvailable ? "기기 안 AI (무료)" : replyLabel)
+                Toggle("AI로 대답하기", isOn: $talkOnline)
+            } footer: {
+                Text("카메라 위 말풍선을 누르면 떠 있는 친구와 목소리로 이야기해요. 녹음은 남기지 않아요. 기기 안 AI가 없는 iPhone에서 켜면 말한 글자만 서버 AI로 보내고, 대화 내용은 저장하지 않아요.")
+            }
+        }
+    }
+
+    private var alertsPage: some View {
+        page("알림") {
+            Section {
+                Toggle("유리병·편지 알림", isOn: $localAlerts)
+                    .onChange(of: localAlerts) { _, on in Task { await updateAlerts(on) } }
+            } footer: { Text("유리병이 도착할 때와 보낸 아기가 편지를 쓸 때 알려 줘요. 이 iPhone이 스스로 맞춰 두는 알림이에요.") }
         }
     }
 
