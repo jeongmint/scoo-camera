@@ -12,6 +12,7 @@ struct InboxScreen: View {
     @AppStorage("companion") private var companionRaw = ""
     @State private var tab: Tab = .friends
     @State private var adding = false
+    @State private var nearby = false
     @State private var code = ""
     @State private var note: String?
 
@@ -160,10 +161,16 @@ struct InboxScreen: View {
                 ShareLink(item: "스쿠카메라에서 친구 해요! 내 친구 코드: \(code)") { Image(systemName: "square.and.arrow.up") }
                     .accessibilityLabel("코드 공유")
             }
-            Button { adding = true } label: {
-                Label("친구 코드로 추가", systemImage: "person.badge.plus").frame(maxWidth: .infinity).padding(.vertical, 10)
+            HStack(spacing: 8) {
+                Button { adding = true } label: {
+                    Label("코드로 추가", systemImage: "person.badge.plus").frame(maxWidth: .infinity).padding(.vertical, 10)
+                }
+                Button { nearby = true } label: {
+                    Label("근처에서 추가", systemImage: "dot.radiowaves.left.and.right").frame(maxWidth: .infinity).padding(.vertical, 10)
+                }
             }
             .buttonStyle(.bordered)
+            .sheet(isPresented: $nearby, onDismiss: { Task { await social.refresh() } }) { NearbyAddScreen(social: social) }
         }
         .padding(16)
         .background(.white.opacity(0.7), in: RoundedRectangle(cornerRadius: 16))
