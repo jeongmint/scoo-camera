@@ -1,7 +1,7 @@
 import Foundation
 import CoreLocation
 
-/// Works out which Seoul district the user is in, and where a photo was taken.
+/// Works out which 시군구 the user is in (anywhere in Korea), and where a photo was taken.
 /// Positions are requested one at a time (no tracking). For the district the coordinate goes to Apple's geocoder;
 /// photo positions are kept only in the app's local garden file for the map guestbook.
 @MainActor
@@ -9,13 +9,13 @@ final class DistrictLocator: NSObject, ObservableObject, CLLocationManagerDelega
     enum Failure: Error, Equatable {
         case denied        // permission refused or restricted
         case unavailable   // no position or no address in time
-        case outsideSeoul  // an address was found but it is not one of the 25 districts
+        case outside       // an address was found but no 시군구 in it (outside Korea)
 
         var reason: String {
             switch self {
             case .denied: "위치 권한이 꺼져 있어요. 위치를 허용하면 동네 친구가 와요."
             case .unavailable: "위치를 확인하지 못했어요."
-            case .outsideSeoul: "서울 밖이에요."
+            case .outside: "국내 시군구를 찾지 못했어요."
             }
         }
     }
@@ -30,7 +30,7 @@ final class DistrictLocator: NSObject, ObservableObject, CLLocationManagerDelega
         manager.desiredAccuracy = kCLLocationAccuracyHundredMeters   // enough for a district and a map pin
     }
 
-    func currentDistrict() async -> Result<SeoulDistrict, Failure> {
+    func currentRegion() async -> Result<Region, Failure> {
         if manager.authorizationStatus == .notDetermined {
             await withCheckedContinuation { continuation in
                 authorization = continuation
@@ -47,15 +47,15 @@ final class DistrictLocator: NSObject, ObservableObject, CLLocationManagerDelega
             let texts = marks.flatMap { mark in
                 [mark.subLocality, mark.locality, mark.subAdministrativeArea, mark.administrativeArea, mark.name, mark.thoroughfare]
             }.compactMap { $0 }
-            if let district = SeoulDistrict.match(in: texts) { return .success(district) }
-            return .failure(texts.isEmpty ? .unavailable : .outsideSeoul)
+            if let region = Regions.match(in: texts) { return .success(region) }
+            return .failure(texts.isEmpty ? .unavailable : .outside)
         } catch {
             return .failure(.unavailable)
         }
     }
 
-    /// The Seoul district a photo was taken in (nil outside Seoul or when the geocoder cannot tell).
-    func district(at place: PhotoLocation) async -> SeoulDistrict? {
+    /// The 시군구 a photo was taken in (nil outside Korea or when the geocoder cannot tell).
+    func region(at place: PhotoLocation) async -> Region? {
         let location = CLLocation(latitude: place.latitude, longitude: place.longitude)
         guard let marks = try? await CLGeocoder().reverseGeocodeLocation(location, preferredLocale: Locale(identifier: "ko_KR")) else {
             return nil
@@ -63,7 +63,7 @@ final class DistrictLocator: NSObject, ObservableObject, CLLocationManagerDelega
         let texts = marks.flatMap { mark in
             [mark.subLocality, mark.locality, mark.subAdministrativeArea, mark.administrativeArea, mark.name, mark.thoroughfare]
         }.compactMap { $0 }
-        return SeoulDistrict.match(in: texts)
+        return Regions.match(in: texts)
     }
 
     /// Where the user is right now, for the map guestbook: a recent fix if there is one, otherwise a quick new one.

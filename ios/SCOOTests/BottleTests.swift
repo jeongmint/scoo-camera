@@ -42,7 +42,7 @@ final class BottleTests: XCTestCase {
             XCTAssertNotEqual(back.parentA, back.parentB)
             XCTAssertFalse(Species.find(back.parentA)?.isEvent ?? true)
             XCTAssertFalse(Species.find(back.parentB)?.isEvent ?? true)
-            XCTAssertNotNil(SeoulDistrict(rawValue: back.origin))
+            XCTAssertNotNil(Regions.find(back.origin))
             XCTAssertGreaterThan(back.arrivesAt, sent.arrivesAt)
         }
     }

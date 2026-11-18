@@ -454,17 +454,17 @@ struct CameraScreen: View {
         }
     }
 
-    /// First launch: the friend a user gets depends on the Seoul district they are in.
-    /// Without a usable position (permission, signal, outside Seoul) the draw is plain random.
+    /// First launch: the friend a user gets depends on the 시군구 they are in.
+    /// Without a usable position (permission, signal, outside Korea) the draw is plain random.
     private func meetFriend() async {
         guard Companion(rawValue: assignedRaw) == nil else { return }
         var generator = SystemRandomNumberGenerator()
-        switch await locator.currentDistrict() {
-        case .success(let district):
-            let friend = Companion.assign(in: district, using: &generator)
-            districtRaw = district.rawValue
+        switch await locator.currentRegion() {
+        case .success(let region):
+            let friend = Companion.assign(in: region, using: &generator)
+            districtRaw = region.id
             assignedRaw = friend.rawValue
-            notify("\(district.rawValue)에서 새 친구 도착! \(friend.title)")
+            notify("\(region.title)에서 새 친구 도착! \(friend.title)")
         case .failure(let failure):
             let friend = Companion.assign(using: &generator)
             districtRaw = ""
@@ -614,13 +614,19 @@ struct CameraScreen: View {
         } catch { calmDown(); notify("저장하지 못했어요. \(error.localizedDescription)") }
     }
 
-    /// 동네 탐험: the first photo in a Seoul district not visited yet meets that district's friend.
+    /// 동네 탐험: the first photo in a 시군구 not visited yet meets the friend who lives there, if it is new.
     private func explore(_ place: PhotoLocation) async {
-        guard let district = await locator.district(at: place) else { return }
+        guard let region = await locator.region(at: place) else { return }
         let drawn = Set(ownedCompanions.map(\.rawValue))
-        guard let friend = Exploration.record(district, owned: drawn) else { return }
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
-        newFriend = NewFriend(species: friend, district: district)
+        switch Exploration.record(region, owned: drawn) {
+        case .met(let friend):
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            newFriend = NewFriend(species: friend, region: region)
+        case .stamped(let friend):
+            notify("\(region.title) 첫 방문 도장!" + (friend.map { " 이 동네 친구 \(LetterWords.withTopicParticle($0.name)) 이미 만났어요." } ?? ""))
+        case .again:
+            break
+        }
     }
 
     private func notify(_ message: String) {
@@ -667,7 +673,7 @@ private struct FloatingFriend: View {
 
 struct NewFriend: Identifiable {
     let species: Species
-    let district: SeoulDistrict
+    let region: Region
     var id: String { species.id }
 }
 
@@ -677,9 +683,11 @@ private struct NewFriendSheet: View {
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         VStack(spacing: 16) {
-            Text("\(meeting.district.rawValue) 첫 방문!").font(.subheadline).foregroundStyle(.secondary)
+            Text("\(meeting.region.title) 첫 방문!").font(.subheadline).foregroundStyle(.secondary)
             SpeciesPortrait(species: meeting.species).frame(width: 200, height: 200)
             Text("새 친구, \(meeting.species.name)").font(.title3.weight(.semibold))
+            Text("\(meeting.region.note)에 사는 친구 · 전국 \(Regions.homes(of: meeting.species.id).count)곳에 살아요")
+                .font(.caption).foregroundStyle(.secondary)
             Text("친구 도감에 들어갔고, 이제 교배할 때 부모로 고를 수 있어요.")
                 .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
             Button("반가워!") { dismiss() }

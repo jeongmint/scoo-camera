@@ -1,0 +1,53 @@
+import XCTest
+@testable import SCOO
+
+final class RegionTests: XCTestCase {
+    func testEveryPlaceInKoreaHasAFriend() {
+        XCTAssertEqual(Province.allCases.count, 17)
+        XCTAssertEqual(Regions.all.count, 229)
+        XCTAssertEqual(Set(Regions.all.map(\.id)).count, 229, "ids are unique (중구, 동구, 고성군 … live in several 시도)")
+        XCTAssertTrue(Regions.all.allSatisfy { $0.friend != nil }, "every friend id is a real species")
+        XCTAssertTrue(Regions.all.allSatisfy { $0.friend?.isEvent == false }, "the snowman is an event friend, not a local one")
+        let living = Set(Regions.all.map(\.friendID))
+        XCTAssertEqual(living, Set(Species.all.filter { !$0.isEvent }.map(\.id)), "all 24 regular friends live somewhere")
+        XCTAssertEqual(Set(Regions.all.map(\.primary)), Set(Companion.regulars))
+    }
+
+    func testRarityHasCommonAndRareFriends() {
+        let counts = Dictionary(grouping: Regions.all, by: \.friendID).mapValues(\.count)
+        XCTAssertGreaterThanOrEqual(counts.values.min() ?? 0, 4)
+        XCTAssertLessThanOrEqual(counts.values.max() ?? 0, 20)
+        XCTAssertEqual(Regions.homes(of: "tangerine").map(\.title).contains("제주 서귀포시"), true)
+    }
+
+    func testGeocoderAnswersFindThePlace() {
+        XCTAssertEqual(Regions.match(in: ["서울특별시", "강남구", "역삼동"])?.id, "서울 강남구")
+        XCTAssertEqual(Regions.match(in: ["대한민국 서울특별시 종로구 사직동 1"])?.id, "서울 종로구")
+        XCTAssertEqual(Regions.match(in: ["경기도", "수원시", "팔달구", "행궁동"])?.id, "경기 수원시")
+        XCTAssertEqual(Regions.match(in: ["경기도", "광주시"])?.id, "경기 광주시", "경기 광주시 is not 광주광역시")
+        XCTAssertEqual(Regions.match(in: ["광주광역시", "북구"])?.id, "광주 북구")
+        XCTAssertEqual(Regions.match(in: ["부산광역시", "강서구"])?.id, "부산 강서구", "서구 inside 강서구 must not match")
+        XCTAssertEqual(Regions.match(in: ["강원도", "고성군"])?.id, "강원 고성군", "old province name")
+        XCTAssertEqual(Regions.match(in: ["경상남도", "고성군"])?.id, "경남 고성군")
+        XCTAssertEqual(Regions.match(in: ["세종특별자치시", "조치원읍"])?.id, "세종")
+        XCTAssertEqual(Regions.match(in: ["가평군"])?.id, "경기 가평군", "a name found once in the country")
+        XCTAssertNil(Regions.match(in: ["중구"]), "ambiguous without a province")
+        XCTAssertNil(Regions.match(in: ["Tokyo", "Shibuya"]))
+        XCTAssertNil(Regions.match(in: ["강남대로", "서울특별시"]))
+    }
+
+    func testStoredSeoulNamesStillResolve() {
+        XCTAssertEqual(Regions.resolve("마포구")?.id, "서울 마포구")
+        XCTAssertEqual(Regions.resolve("서울 마포구")?.id, "서울 마포구")
+        XCTAssertNil(Regions.resolve("없는구"))
+    }
+
+    func testHometownFriendUsuallyArrives() {
+        var generator = SystemRandomNumberGenerator()
+        let region = Regions.find("서울 강남구")!
+        let draws = (0..<2_000).map { _ in Companion.assign(in: region, using: &generator) }
+        let share = Double(draws.filter { $0 == region.primary }.count) / Double(draws.count)
+        XCTAssertEqual(share, Companion.hometownChance, accuracy: 0.05)
+        XCTAssertFalse(draws.contains(.happy))
+    }
+}
