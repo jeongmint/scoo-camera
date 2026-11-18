@@ -6,7 +6,7 @@ import UIKit
 struct BreedScreen: View {
     @EnvironmentObject private var garden: GardenStore
     @StateObject private var store = BreedStore()
-    @AppStorage("assignedCompanion") private var assignedRaw = ""
+    @ObservedObject private var friends = FriendStore.shared
     @AppStorage("unlockAllFriends") private var unlockAll = false
     @State private var parentA: String?
     @State private var parentB: String?
@@ -17,7 +17,7 @@ struct BreedScreen: View {
     private enum Slot { case a, b }
 
     private var owned: [Species] {
-        Species.owned(assigned: Companion(rawValue: assignedRaw), unlockAll: unlockAll, collected: Exploration.load().collected)
+        Species.owned(friends.species, unlockAll: unlockAll)
     }
     /// Species plus babies in bloom (재교배).
     private var available: [BreedParent] { BreedRules.parents(species: owned, breeds: store.breeds, moments: moments) }
@@ -105,7 +105,7 @@ struct BreedScreen: View {
     @ViewBuilder
     private var picker: some View {
         if available.count < 2 {
-            Text("교배하려면 친구가 두 명 이상 있어야 해요. 지금은 \(owned.map(\.name).joined(separator: ", ")). 설정 > 동네 친구(테스트)에서 ‘모든 친구 열기’를 켜면 전부 시험해 볼 수 있어요.")
+            Text("교배하려면 친구가 두 명 이상 있어야 해요. 지금은 \(owned.map(\.name).joined(separator: ", ")). 유리병 입양으로 친구를 하나 띄우면 다음 날 새 친구가 와요. 설정 > 동네 친구(테스트)의 ‘모든 친구 열기’로 전부 시험해 볼 수도 있어요.")
                 .font(.footnote).foregroundStyle(.secondary)
                 .padding(16).background(.white.opacity(0.6), in: RoundedRectangle(cornerRadius: 14))
         } else {

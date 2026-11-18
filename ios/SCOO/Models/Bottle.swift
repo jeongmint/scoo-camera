@@ -13,13 +13,22 @@ struct Bottle: Identifiable, Codable, Equatable {
     /// Where the baby comes from, e.g. "마포구".
     let origin: String
     let sentAt: Date
-    let arrivesAt: Date
+    var arrivesAt: Date
     /// Outgoing: "가끔 소식 전해줘" was ticked, so letters come back.
     var wantsNews = false
     /// Incoming: the user opened it and took the baby in.
     var opened = false
+    /// Outgoing: its sender already got their one thing back (a swapped bottle, or a new friend from the sea).
+    /// Older records decode with nil.
+    var settled: Bool? = nil
 
-    var title: String { "\(Species.find(parentA)?.name ?? parentA) × \(Species.find(parentB)?.name ?? parentB)" }
+    /// A character travelling by itself (not a bred baby): both parents are the same species.
+    var isCharacter: Bool { parentA == parentB }
+    var character: Species? { isCharacter ? Species.find(parentA) : nil }
+    var title: String {
+        if isCharacter { return Species.find(parentA)?.name ?? parentA }
+        return "\(Species.find(parentA)?.name ?? parentA) × \(Species.find(parentB)?.name ?? parentB)"
+    }
     /// The baby as it would look in the family list (for portraits).
     var baby: Breed { Breed(id: id, parentA: parentA, parentB: parentB, born: sentAt, bornAtMoment: 0, origin: origin) }
 

@@ -15,40 +15,24 @@ private struct SeededGenerator: RandomNumberGenerator {
 }
 
 final class CompanionTests: XCTestCase {
-    func testEveryFriendHasAnImageInTheApp() {
-        for friend in Companion.allCases {
-            XCTAssertNotNil(UIImage(named: friend.assetName), "\(friend.title) 이미지가 없어요")
+    func testAnyCharacterCanFloatAndHasAPicture() {
+        for species in Species.all {
+            XCTAssertNotNil(UIImage(named: species.assetName), "\(species.name) 이미지가 없어요")
         }
+        XCTAssertEqual(Set(Species.all.map(\.assetName)).count, Species.all.count)
+        XCTAssertNil(Species.find(""), "빈 선택은 혼자 찍기")
     }
 
-    func testTitlesAndAssetNamesAreUnique() {
-        XCTAssertEqual(Set(Companion.allCases.map(\.title)).count, Companion.allCases.count)
-        XCTAssertEqual(Set(Companion.allCases.map(\.assetName)).count, Companion.allCases.count)
-    }
-
-    func testEmptyOrUnknownPreferenceMeansShootingAlone() {
-        XCTAssertNil(Companion(rawValue: ""))
-        XCTAssertNil(Companion(rawValue: "unknown"))
-        XCTAssertEqual(Companion(rawValue: "nyamo"), .nyamo)
-    }
-
-    func testRandomDrawNeverHandsOutTheEventSnowman() {
-        XCTAssertEqual(Set(Companion.regulars), [.gwiyo, .kuru, .mori, .nyamo])
-        XCTAssertTrue(Companion.happy.isEvent)
+    func testStarterComesFromThePlacesFiveAndNeverTheSnowman() {
         var generator = SeededGenerator(state: 42)
-        let draws = (0..<400).map { _ in Companion.assign(using: &generator) }
-        XCTAssertFalse(draws.contains(.happy))
-        XCTAssertEqual(Set(draws), Set(Companion.regulars), "400번 뽑으면 네 명 모두 나와야 해요")
-    }
-
-    func testEachUserOwnsTheirDrawPlusTheOpenEventFriend() {
-        for friend in Companion.regulars {
-            let owned = Companion.owned(assigned: friend)
-            XCTAssertEqual(owned.first, friend)
-            XCTAssertEqual(owned.count, 1 + Companion.openEvents.count)
-            XCTAssertTrue(owned.contains(.happy), "테스트 버전에서는 눈사람도 함께 받아요")
-            XCTAssertEqual(Set(owned).count, owned.count)
-        }
+        let region = Regions.find("서울 마포구")!
+        let draws = (0..<400).map { _ in region.drawStarter(using: &generator).id }
+        XCTAssertEqual(Set(draws), Set(region.candidates), "400번 뽑으면 다섯 친구 모두 나와요")
+        XCTAssertFalse(draws.contains("happy"))
+        let anywhere = (0..<400).map { _ in Regions.randomStarter(using: &generator) }
+        XCTAssertFalse(anywhere.contains { $0.isEvent })
+        XCTAssertEqual(Species.regulars.count, 24)
+        XCTAssertEqual(Species.openEvents, ["happy"])
     }
 
     func testSpotIsASquareAroundTheFloatingCenter() {

@@ -16,18 +16,49 @@ struct TalkPet: Equatable {
         lhs.name == rhs.name && lhs.kind == rhs.kind && lhs.personality == rhs.personality && lhs.pitch == rhs.pitch
     }
 
-    /// The default floating Mori, or the friend picked in the camera menu.
-    static func of(_ companion: Companion?, moriName: String, personality: String) -> TalkPet {
-        switch companion {
-        case .gwiyo: return TalkPet(name: "귀요", kind: "작은 금색 방울", personality: personality, tint: (0.86, 0.68, 0.32), pitch: 1.45)
-        case .kuru: return TalkPet(name: "쿠르", kind: "몽실몽실 흰 구름", personality: personality, tint: (0.58, 0.78, 0.96), pitch: 1.3)
-        case .nyamo: return TalkPet(name: "냐모", kind: "통통한 치즈 고양이", personality: personality, tint: (0.96, 0.72, 0.52), pitch: 1.4)
-        case .happy: return TalkPet(name: "해피", kind: "초록 목도리를 한 눈사람", personality: personality, tint: (0.62, 0.78, 0.56), pitch: 1.2)
-        case .mori, nil:
-            return TalkPet(name: companion == nil ? moriName : "모리", kind: "동글동글 이끼 공 마리모", personality: personality,
-                    tint: (0.47, 0.66, 0.30), pitch: 1.25)
+    /// The default floating Mori, or the character picked in the camera menu.
+    static func of(_ species: Species?, moriName: String, personality: String) -> TalkPet {
+        guard let species, species.id != "mori" else {
+            return TalkPet(name: species == nil ? moriName : "모리", kind: "동글동글 이끼 공 마리모", personality: personality,
+                           tint: (0.47, 0.66, 0.30), pitch: 1.25)
         }
+        let look = looks[species.id] ?? Look(kind: "작은 친구", tint: (0.62, 0.74, 0.58), pitch: 1.3)
+        return TalkPet(name: species.name, kind: look.kind, personality: personality, tint: look.tint, pitch: look.pitch)
     }
+
+    private struct Look {
+        let kind: String
+        let tint: (red: Double, green: Double, blue: Double)
+        let pitch: Float
+    }
+
+    /// What each character is and its color for the glowing frame, read off its picture.
+    private static let looks: [String: Look] = [
+        "gwiyo": Look(kind: "작은 금색 방울", tint: (0.86, 0.68, 0.32), pitch: 1.45),
+        "kuru": Look(kind: "몽실몽실 흰 구름", tint: (0.58, 0.78, 0.96), pitch: 1.3),
+        "nyamo": Look(kind: "통통한 치즈 고양이", tint: (0.96, 0.72, 0.52), pitch: 1.4),
+        "happy": Look(kind: "초록 목도리를 한 눈사람", tint: (0.62, 0.78, 0.56), pitch: 1.2),
+        "baseball": Look(kind: "빨간 실밥 야구공", tint: (0.86, 0.32, 0.30), pitch: 1.35),
+        "chiko": Look(kind: "볼이 통통한 다람쥐", tint: (0.93, 0.66, 0.38), pitch: 1.5),
+        "deogi": Look(kind: "귀가 축 처진 강아지", tint: (0.82, 0.62, 0.40), pitch: 1.25),
+        "dia": Look(kind: "새빨간 사과", tint: (0.88, 0.22, 0.24), pitch: 1.4),
+        "dochi": Look(kind: "포슬포슬 고슴도치", tint: (0.64, 0.47, 0.32), pitch: 1.35),
+        "hechi": Look(kind: "물가에 사는 납작 꼬리 친구", tint: (0.52, 0.38, 0.28), pitch: 1.1),
+        "huu": Look(kind: "깃털 보송한 부엉이", tint: (0.72, 0.60, 0.52), pitch: 1.05),
+        "luna": Look(kind: "동그란 보름달", tint: (0.93, 0.88, 0.68), pitch: 1.15),
+        "mellu": Look(kind: "그물무늬 멜론", tint: (0.72, 0.82, 0.42), pitch: 1.3),
+        "mupu": Look(kind: "꼬리가 두툼한 너구리", tint: (0.56, 0.46, 0.38), pitch: 1.15),
+        "otter": Look(kind: "튜브를 낀 수달", tint: (0.45, 0.80, 0.72), pitch: 1.35),
+        "popo": Look(kind: "뽀얀 찻주전자", tint: (0.70, 0.82, 0.60), pitch: 1.2),
+        "riru": Look(kind: "하얀 속살 리치", tint: (0.95, 0.45, 0.50), pitch: 1.45),
+        "sia": Look(kind: "보랏빛 블루베리", tint: (0.42, 0.50, 0.82), pitch: 1.4),
+        "sunny": Look(kind: "반짝이는 해님", tint: (0.98, 0.80, 0.25), pitch: 1.45),
+        "suri": Look(kind: "줄무늬 수박", tint: (0.36, 0.66, 0.32), pitch: 1.3),
+        "tangerine": Look(kind: "새콤한 귤", tint: (0.98, 0.56, 0.16), pitch: 1.5),
+        "tori": Look(kind: "분홍 귀 하얀 토끼", tint: (0.95, 0.74, 0.80), pitch: 1.5),
+        "toto": Look(kind: "고리를 두른 행성", tint: (0.76, 0.63, 0.90), pitch: 1.2),
+        "yarn": Look(kind: "분홍 실타래", tint: (0.92, 0.56, 0.62), pitch: 1.35),
+    ]
 }
 
 /// One exchange, sent along so the reply model remembers the last few lines.

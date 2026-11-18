@@ -60,26 +60,29 @@ final class BottleTests: XCTestCase {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: folder) }
         let breeds = BreedStore(directory: folder)
-        let bottles = BottleStore(directory: folder)
+        let bottles = BottleStore(directory: folder, luck: { _ in true })   // someone at sea swaps
+        let friends = FriendStore(defaults: try XCTUnwrap(UserDefaults(suiteName: "bottle-\(UUID().uuidString)")))
         XCTAssertFalse(bottles.isOnline)
         let baby = try breeds.hatch(a: "tori", b: "sia", moments: 0, now: start)
 
-        try await bottles.send(baby, wantsNews: true, from: "마포구", breeds: breeds, fast: true, now: start)
+        try await bottles.send(baby, wantsNews: true, from: "마포구", breeds: breeds, friends: 1, fast: true, now: start)
         XCTAssertTrue(breeds.breeds.isEmpty, "띄운 아이는 목록에서 떠나요")
         XCTAssertEqual(bottles.bottles.count, 2)
         let incoming = try XCTUnwrap(bottles.bottles.first { $0.direction == .incoming })
         do {
-            try await bottles.open(incoming, breeds: breeds, moments: 5, now: start)
+            try await bottles.open(incoming, breeds: breeds, friends: friends, moments: 5, now: start)
             XCTFail("도착 전엔 열 수 없어요")
         } catch { }
 
         let later = incoming.arrivesAt.addingTimeInterval(1)
-        let adopted = try await bottles.open(incoming, breeds: breeds, moments: 5, now: later)
+        guard case .baby(let adopted) = try await bottles.open(incoming, breeds: breeds, friends: friends, moments: 5, now: later) else {
+            return XCTFail("교배 아기가 담긴 유리병이에요")
+        }
         XCTAssertEqual(adopted.origin, incoming.origin)
         XCTAssertEqual(breeds.breeds.map(\.id), [adopted.id])
         XCTAssertTrue(bottles.bottles.first { $0.id == incoming.id }?.opened ?? false)
         do {
-            try await bottles.open(incoming, breeds: breeds, moments: 5, now: later)
+            try await bottles.open(incoming, breeds: breeds, friends: friends, moments: 5, now: later)
             XCTFail("한 번만 열려요")
         } catch { }
 

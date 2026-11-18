@@ -148,9 +148,8 @@ struct GardenScreen: View {
     private var personality: Personality { Personality.of(garden.snapshot.photos) }
     private var todayPhotos: [PhotoRecord] { garden.snapshot.photos.filter { Calendar.current.isDateInToday($0.date) } }
     /// The friend floating in the camera, if one was picked (otherwise Mori).
-    private var floatingFriend: Companion? {
-        guard let picked = Companion(rawValue: companionRaw), let assigned = Companion(rawValue: assignedRaw),
-              Companion.owned(assigned: assigned).contains(picked) else { return nil }
+    private var floatingFriend: Species? {
+        guard let picked = Species.find(companionRaw), FriendStore.shared.owns(picked.id) else { return nil }
         return picked
     }
 
@@ -246,7 +245,7 @@ struct GardenScreen: View {
             return
         }
         do {
-            try WalkMode.start(heroName: floatingFriend?.title ?? garden.snapshot.name, district: nil)
+            try WalkMode.start(heroName: floatingFriend?.name ?? garden.snapshot.name, district: nil)
             walking = true
             WidgetBridge.refresh()
             // Fill in the district once it is known.
@@ -266,7 +265,7 @@ struct GardenScreen: View {
         guard !images.isEmpty else { return }
         let friend = floatingFriend
         let strip = FilmStrip(photos: images, date: Date(),
-                              caption: FilmStrip.caption(friend: friend?.title ?? garden.snapshot.name, photos: Array(records.prefix(4))),
+                              caption: FilmStrip.caption(friend: friend?.name ?? garden.snapshot.name, photos: Array(records.prefix(4))),
                               friendAsset: friend?.assetName)
         let renderer = ImageRenderer(content: strip)
         renderer.scale = 2

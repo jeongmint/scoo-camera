@@ -15,22 +15,17 @@ final class BreedTests: XCTestCase {
         XCTAssertNotNil(UIImage(named: "Daisy"))
     }
 
-    func testCameraFriendsAreInTheFamily() {
-        for friend in Companion.allCases {
-            XCTAssertEqual(Species(friend)?.id, friend.rawValue)
-        }
-    }
-
-    func testOwnedFriendsFollowTheDrawUnlessEverythingIsOpen() {
-        XCTAssertEqual(Species.owned(assigned: .kuru, unlockAll: false).map(\.id), ["kuru", "happy"])
-        XCTAssertEqual(Species.owned(assigned: nil, unlockAll: false), [])
-        XCTAssertEqual(Species.owned(assigned: nil, unlockAll: true).count, 25)
+    func testOwnedFriendsAreWhatTheUserHasUnlessEverythingIsOpen() {
+        let mine = ["kuru", "happy"].compactMap(Species.find)
+        XCTAssertEqual(Species.owned(mine, unlockAll: false).map(\.id), ["kuru", "happy"])
+        XCTAssertEqual(Species.owned([], unlockAll: false), [])
+        XCTAssertEqual(Species.owned([], unlockAll: true).count, 25)
     }
 
     // MARK: Rules
 
     func testBreedingNeedsTwoDifferentOwnedParents() {
-        let owned = Species.owned(assigned: .mori, unlockAll: false)
+        let owned = ["mori", "happy"].compactMap(Species.find)
         XCTAssertEqual(BreedRules.problem(a: nil, b: "happy", owned: owned), .missingParent)
         XCTAssertEqual(BreedRules.problem(a: "mori", b: "mori", owned: owned), .sameParent)
         XCTAssertEqual(BreedRules.problem(a: "mori", b: "sia", owned: owned), .notOwned)
