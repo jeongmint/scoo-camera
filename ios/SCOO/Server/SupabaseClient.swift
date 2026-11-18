@@ -224,6 +224,14 @@ actor SupabaseClient {
         keychain.delete()
     }
 
+    /// Deletes this account and everything of it on the server (bottles already given to someone stay theirs),
+    /// then forgets the session on this phone. Photos in the app album are not touched.
+    func deleteAccount() async throws {
+        guard session != nil else { return }
+        _ = try await call("rest/v1/rpc/delete_my_account", method: "POST", body: [:])
+        signOut()
+    }
+
     /// Calls a Postgres function (`/rest/v1/rpc/<name>`).
     func rpc<T: Decodable>(_ name: String, _ params: [String: Any], as type: T.Type) async throws -> T {
         let data = try await call("rest/v1/rpc/\(name)", method: "POST", body: params)
