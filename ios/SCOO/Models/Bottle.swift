@@ -87,7 +87,7 @@ enum BottleRules {
     static func letterText(_ bottle: Bottle, index: Int, word: String? = nil) -> String {
         if let word { return LetterWords.line(word: word, index: index) }
         var generator = StableGenerator(seed: StableGenerator.seed(bottle.id))
-        let place = SeoulDistrict.allCases.randomElement(using: &generator)?.rawValue ?? "어딘가"
+        let place = Regions.all.randomElement(using: &generator)?.title ?? "어딘가"
         let friend = Species.all.filter { $0.id != bottle.parentA && !$0.isEvent }.randomElement(using: &generator)?.name ?? "새 친구"
         let lines = [
             "잘 도착했어! 여기는 \(place)야. 바람 냄새가 달라.",
@@ -117,7 +117,7 @@ struct LocalOcean: BottleOcean {
         let family = Species.all.filter { !$0.isEvent }
         let a = family.randomElement(using: &generator) ?? Species.all[0]
         let b = family.filter { $0.id != a.id }.randomElement(using: &generator) ?? Species.all[1]
-        let origin = SeoulDistrict.allCases.randomElement(using: &generator)?.rawValue ?? "어딘가"
+        let origin = Regions.all.randomElement(using: &generator)?.title ?? "어딘가"
         // It sets off a little after ours, so it arrives a little after ours too.
         let delay = Double.random(in: 0.1...0.5, using: &generator) * BottleRules.travelTime(fast: fast)
         let sentAt = sent.sentAt.addingTimeInterval(delay)

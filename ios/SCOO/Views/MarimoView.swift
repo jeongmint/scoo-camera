@@ -251,8 +251,8 @@ struct GardenScreen: View {
             WidgetBridge.refresh()
             // Fill in the district once it is known.
             Task {
-                if case .success(let district) = await locator.currentDistrict() {
-                    WalkMode.update(district: district.rawValue)
+                if case .success(let region) = await locator.currentRegion() {
+                    WalkMode.update(district: region.title)
                 }
             }
         } catch {

@@ -1,37 +1,49 @@
 import Foundation
 
-/// 동네 탐험: the first photo taken in a Seoul district you have not visited yet meets a new friend.
-/// Kept on the device (UserDefaults) for now.
+/// 동네 탐험: the first photo taken in a 시군구 you have not visited yet meets the friend who lives there,
+/// if you have not met it before. Each friend lives in several places, so rare friends need a trip.
+/// Kept on the device (UserDefaults).
 struct Exploration: Codable, Equatable {
     struct Meeting: Codable, Equatable {
         let species: String
+        /// Region id ("서울 마포구"); records from the Seoul-only days hold just "마포구".
         let district: String
         let date: Date
+
+        var place: String { Regions.resolve(district)?.title ?? district }
     }
 
-    /// District name → first visit.
+    /// What a photo in a place brought.
+    enum Visit: Equatable {
+        /// First time here, and its friend is new.
+        case met(Species)
+        /// First time here, but its friend was met before (somewhere else, or it is the user's own friend).
+        case stamped(Species?)
+        /// Been here before.
+        case again
+    }
+
+    /// Region id → first visit.
     var visited: [String: Date] = [:]
     /// Friends met by exploring, in the order they were met.
     var met: [Meeting] = []
 
     var collected: Set<String> { Set(met.map(\.species)) }
 
-    /// Records a photo in `district`. Returns the friend met, if this was a first visit and someone new was there.
-    /// `others` are species already owned another way (the drawn friend, event friends), so they are not met twice.
-    mutating func visit<G: RandomNumberGenerator>(_ district: SeoulDistrict, owned others: Set<String>, now: Date,
-                                                  using generator: inout G) -> Species? {
-        guard visited[district.rawValue] == nil else { return nil }
-        visited[district.rawValue] = now
-        let known = collected.union(others)
-        let pick: Species?
-        if let local = district.special, !known.contains(local.id) {
-            pick = local
-        } else {
-            // no local friend (or already met): someone from the family nobody here has met yet
-            pick = Species.all.filter { !$0.isEvent && !known.contains($0.id) }.randomElement(using: &generator)
-        }
-        if let pick { met.append(Meeting(species: pick.id, district: district.rawValue, date: now)) }
-        return pick
+    /// Records a photo in `region`. `others` are species already owned another way (the drawn friend, event
+    /// friends), so they are not met twice.
+    mutating func visit(_ region: Region, owned others: Set<String>, now: Date) -> Visit {
+        guard visited[region.id] == nil else { return .again }
+        visited[region.id] = now
+        guard let local = region.friend else { return .stamped(nil) }
+        if collected.union(others).contains(local.id) { return .stamped(local) }
+        met.append(Meeting(species: local.id, district: region.id, date: now))
+        return .met(local)
+    }
+
+    /// Visited places counted per province, for the collection screen.
+    func visits(in province: Province) -> Int {
+        visited.keys.compactMap(Regions.resolve).filter { $0.province == province }.count
     }
 
     // MARK: Storage
@@ -39,9 +51,10 @@ struct Exploration: Codable, Equatable {
     static let key = "exploration"
 
     static func load(from defaults: UserDefaults = .standard) -> Exploration {
-        guard let data = defaults.data(forKey: key), let value = try? JSONDecoder().decode(Exploration.self, from: data) else {
+        guard let data = defaults.data(forKey: key), var value = try? JSONDecoder().decode(Exploration.self, from: data) else {
             return Exploration()
         }
+        value.migrateSeoulNames()
         return value
     }
 
@@ -49,14 +62,21 @@ struct Exploration: Codable, Equatable {
         if let data = try? JSONEncoder().encode(self) { defaults.set(data, forKey: Self.key) }
     }
 
-    /// Visits a district and saves the result. Returns the friend met, if any.
+    /// Visits a place and saves the result.
     @discardableResult
-    static func record(_ district: SeoulDistrict, owned others: Set<String>, defaults: UserDefaults = .standard,
-                       now: Date = Date()) -> Species? {
+    static func record(_ region: Region, owned others: Set<String>, defaults: UserDefaults = .standard,
+                       now: Date = Date()) -> Visit {
         var state = load(from: defaults)
-        var generator = SystemRandomNumberGenerator()
-        let met = state.visit(district, owned: others, now: now, using: &generator)
+        let result = state.visit(region, owned: others, now: now)
         state.save(to: defaults)
-        return met
+        return result
+    }
+
+    /// Before regions went nationwide, places were stored as bare Seoul district names ("마포구").
+    mutating func migrateSeoulNames() {
+        var moved: [String: Date] = [:]
+        for (key, date) in visited { moved[Regions.resolve(key)?.id ?? key] = date }
+        visited = moved
+        met = met.map { Meeting(species: $0.species, district: Regions.resolve($0.district)?.id ?? $0.district, date: $0.date) }
     }
 }

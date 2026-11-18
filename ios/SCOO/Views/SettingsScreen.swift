@@ -39,12 +39,16 @@ struct SettingsScreen: View {
                     Toggle("찍은 자리를 지도에 남기기", isOn: $savePlace)
                 } header: { Text("카메라") } footer: { Text("앱 앨범에는 항상 저장해요. 자동 저장을 켜면 다음 촬영 후 사진 추가 권한을 요청해요.") }
                 Section {
-                    LabeledContent("지금 동네", value: districtRaw.isEmpty ? "정해지지 않음" : districtRaw)
+                    LabeledContent("지금 동네", value: Regions.resolve(districtRaw)?.title ?? (districtRaw.isEmpty ? "정해지지 않음" : districtRaw))
                     LabeledContent("내 친구", value: Companion(rawValue: assignedRaw)?.title ?? "아직 없음")
                     Button(finding ? "위치 확인 중…" : "내 위치로 다시 찾기") { Task { await findByLocation() } }.disabled(finding)
-                    Menu("구를 직접 골라서 받기") {
-                        ForEach(SeoulDistrict.allCases) { district in
-                            Button("\(district.rawValue) · \(district.primary.title)") { receive(in: district) }
+                    Menu("동네를 직접 골라서 받기") {
+                        ForEach(Province.allCases) { province in
+                            Menu(province.rawValue) {
+                                ForEach(Regions.of(province)) { region in
+                                    Button("\(region.name) · \(region.friend?.name ?? "") · \(region.primary.title)") { receive(in: region) }
+                                }
+                            }
                         }
                     }
                     Button("랜덤으로 다시 받기") { receiveRandom() }
@@ -52,7 +56,7 @@ struct SettingsScreen: View {
                     Toggle("유리병 빠르게 (1분 배송 테스트)", isOn: $bottleFast)
                     if let note { Text(note).font(.footnote) }
                 } header: { Text("동네 친구 (테스트)") } footer: {
-                    Text("서울 25개 구마다 잘 만나는 친구가 달라요. 구의 친구가 70%, 나머지는 다른 친구예요. 새로 받아도 사진과 성장 기록은 그대로예요. ‘모든 친구 열기’를 켜면 교배 화면에서 25종을 모두 고를 수 있어요.")
+                    Text("처음 받는 카메라 친구는 지금 있는 시군구에 따라 달라요. 그 동네와 어울리는 친구가 70%, 나머지는 다른 친구예요. 새로 받아도 사진과 성장 기록은 그대로예요. ‘모든 친구 열기’를 켜면 교배 화면에서 25종을 모두 고를 수 있어요.")
                 }
                 Section {
                     if SupabaseConfig.isConfigured {
@@ -245,12 +249,12 @@ struct SettingsScreen: View {
         }
     }
 
-    private func receive(in district: SeoulDistrict) {
+    private func receive(in region: Region) {
         var generator = SystemRandomNumberGenerator()
-        let friend = Companion.assign(in: district, using: &generator)
-        districtRaw = district.rawValue
+        let friend = Companion.assign(in: region, using: &generator)
+        districtRaw = region.id
         assignedRaw = friend.rawValue
-        note = "\(district.rawValue) · \(friend.title)"
+        note = "\(region.title) · \(friend.title)"
     }
 
     private func receiveRandom() {
@@ -264,8 +268,8 @@ struct SettingsScreen: View {
     private func findByLocation() async {
         finding = true
         defer { finding = false }
-        switch await locator.currentDistrict() {
-        case .success(let district): receive(in: district)
+        switch await locator.currentRegion() {
+        case .success(let region): receive(in: region)
         case .failure(let failure): note = failure.reason
         }
     }
