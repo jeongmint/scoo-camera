@@ -64,7 +64,7 @@ struct SettingsScreen: View {
 
     private func row<Destination: View>(_ title: String, icon: String, color: Color, value: String = "",
                                         @ViewBuilder destination: @escaping () -> Destination) -> some View {
-        NavigationLink(destination: destination) {
+        NavigationLink { destination() } label: {
             HStack(spacing: 12) {
                 Image(systemName: icon).font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
                     .frame(width: 30, height: 30).background(color, in: RoundedRectangle(cornerRadius: 8))
