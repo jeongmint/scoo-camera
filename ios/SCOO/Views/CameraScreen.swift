@@ -48,6 +48,9 @@ struct CameraScreen: View {
     @StateObject private var talk = PetTalkSession()
     /// Talk replies from the server (text only); off = built-in lines only.
     @AppStorage("talkOnline") private var talkOnline = true
+    /// 주변 친구: share a rounded position with friends and show theirs on the camera (off by default).
+    @AppStorage("friendRadar") private var friendRadarOn = false
+    @StateObject private var radar = FriendRadar()
 
     private enum CameraSheet: String, Identifiable {
         case album, garden, settings, map
@@ -82,6 +85,7 @@ struct CameraScreen: View {
                         .frame(width: 54, height: 54).position(focusPoint).allowsHitTesting(false)
                 }
                 if talk.isOn { TalkGlow(color: talkPet.color, level: talk.level, phase: talk.phase).transition(.opacity) }
+                if radar.isOn { RadarOverlay(blips: radar.blips, heading: radar.heading, size: size, insets: insets) }
                 chrome(insets: insets)
                 floatingMori(size: size, insets: insets)
                 if talk.isOn { talkBubble(size: size, insets: insets) }
@@ -121,14 +125,26 @@ struct CameraScreen: View {
         .persistentSystemOverlays(.hidden)
         .tint(.white)
         .task {
+            if friendRadarOn { radar.start() }
             camera.setLook(look); camera.start()
             await meetFriend()
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active && sheet == nil && !importing { camera.start() }
-            else { camera.stop(); focusTask?.cancel(); talk.stop() }
+            else { camera.stop(); focusTask?.cancel(); talk.stop(); radar.stop() }
+            if phase == .active && sheet == nil && friendRadarOn { radar.start() }
         }
-        .onChange(of: sheet) { _, value in if value != nil { camera.stop(); talk.stop() } }
+        .onChange(of: sheet) { _, value in
+            if value != nil { camera.stop(); talk.stop(); radar.stop() }
+            else if friendRadarOn && scenePhase == .active { radar.start() }
+        }
+        .onChange(of: friendRadarOn) { _, on in
+            if on {
+                radar.start()
+                notify("주변 친구 보기를 켰어요. 친구에게만 내 대략 위치(100m 단위)가 보이고, 끄면 바로 지워져요.")
+            } else { radar.stop() }
+        }
+        .onChange(of: radar.problem) { _, problem in if let problem { notify(problem); radar.problem = nil; friendRadarOn = radar.isOn } }
         .onChange(of: importing) { _, value in
             if value { camera.stop() }
             else if scenePhase == .active && sheet == nil { camera.start() }
@@ -156,7 +172,7 @@ struct CameraScreen: View {
         }
         .onChange(of: camera.errorMessage) { _, error in if let error { notify(error) } }
         .onChange(of: garden.message) { _, error in if let error { notify(error); garden.message = nil } }
-        .onDisappear { camera.stop(); toastTask?.cancel(); focusTask?.cancel(); expressionTask?.cancel(); talk.stop() }
+        .onDisappear { camera.stop(); toastTask?.cancel(); focusTask?.cancel(); expressionTask?.cancel(); talk.stop(); radar.stop() }
         .onChange(of: talk.problem) { _, problem in if let problem { notify(problem); talk.problem = nil } }
         .onChange(of: companionRaw) { _, _ in talk.update(talkPet) }
         .animation(.easeInOut(duration: 0.35), value: talk.isOn)
@@ -257,6 +273,11 @@ struct CameraScreen: View {
                             Text("기본 모리").tag("")
                             ForEach(ownedCompanions) { friend in Text(friend.menuTitle).tag(friend.rawValue) }
                         }
+                    }
+                    Section {
+                        Toggle("주변 친구 보기", isOn: $friendRadarOn)
+                    } footer: {
+                        Text("친구에게만 내 대략 위치가 보여요.")
                     }
                     if companion != nil {
                         Section {

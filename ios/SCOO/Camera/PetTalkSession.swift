@@ -27,6 +27,8 @@ final class PetTalkSession: NSObject, ObservableObject {
 
     private var pet = TalkPet.of(nil, moriName: "모리", personality: "다정함")
     private var history: [TalkTurn] = []
+    /// The phone's own model, when it has one (free, nothing leaves the phone).
+    private let onDevice = OnDeviceReplies()
     private let engine = AVAudioEngine()
     private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "ko-KR"))
     private var request: SFSpeechAudioBufferRecognitionRequest?
@@ -80,6 +82,7 @@ final class PetTalkSession: NSObject, ObservableObject {
         guard phase == .starting else { return }   // stopped while asking for permission
         history = []
         reply = ""
+        onDevice.reset()
         listen()
     }
 
@@ -236,6 +239,7 @@ final class PetTalkSession: NSObject, ObservableObject {
     }
 
     private func reply(to text: String) async -> TalkReply {
+        if let answer = await onDevice.reply(to: text, pet: pet) { return answer }
         if useServer && SupabaseConfig.isConfigured, let answer = await serverReply(to: text) { return answer }
         return LocalReplies.reply(to: text, roll: Double.random(in: 0..<1))
     }

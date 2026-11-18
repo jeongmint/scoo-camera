@@ -23,6 +23,8 @@ struct SettingsScreen: View {
     @State private var provider: String?
     @State private var webLogin: OAuthProvider?
     @State private var loginNote: String?
+    @State private var confirmDelete = false
+    @State private var deleting = false
     @State private var appleNonce = ""
     @StateObject private var social = SocialStore()
     @StateObject private var locator = DistrictLocator()
@@ -103,6 +105,15 @@ struct SettingsScreen: View {
                             if let code = social.profile?.friend_code {
                                 LabeledContent("내 친구 코드", value: code)
                             }
+                            NavigationLink("차단한 사람") { BlockedScreen() }
+                            Button(deleting ? "지우는 중…" : "계정 삭제", role: .destructive) { confirmDelete = true }
+                                .disabled(deleting)
+                                .confirmationDialog("계정을 지울까요?", isPresented: $confirmDelete, titleVisibility: .visible) {
+                                    Button("계정과 서버 기록 지우기", role: .destructive) { Task { await deleteAccount() } }
+                                    Button("취소", role: .cancel) { }
+                                } message: {
+                                    Text("친구·편지·유리병 기록이 서버에서 바로 지워지고 되돌릴 수 없어요. 이미 다른 사람에게 도착한 아기는 그 사람에게 남아요. 이 iPhone의 사진은 그대로예요.")
+                                }
                         }
                     } else {
                         Text("서버 키가 아직 없어서 유리병은 이 기기 안에서만 시험해요.").font(.footnote)
@@ -119,8 +130,9 @@ struct SettingsScreen: View {
                 }
                 Section {
                     Toggle("AI로 대답하기", isOn: $talkOnline)
+                    LabeledContent("이 iPhone의 대답", value: OnDeviceReplies.isAvailable ? "기기 안 AI (무료)" : (talkOnline ? "서버 AI" : "앱 안 대답"))
                 } header: { Text("대화 모드") } footer: {
-                    Text("카메라 위쪽 말풍선을 누르면 떠 있는 친구와 목소리로 이야기해요. 목소리는 iPhone에서 글자로 바뀌고, 녹음은 남기지 않아요. ‘AI로 대답하기’를 켜면 그 글자만 서버를 거쳐 OpenAI로 보내 대답을 만들고, 대화 내용은 저장하지 않아요. 끄면 앱 안의 간단한 대답만 해요.")
+                    Text("카메라 위쪽 말풍선을 누르면 떠 있는 친구와 목소리로 이야기해요. 목소리는 iPhone에서 글자로 바뀌고, 녹음은 남기지 않아요. Apple Intelligence가 되는 iPhone은 기기 안 AI가 대답해서 아무것도 밖으로 나가지 않아요. 그 밖의 iPhone에서 ‘AI로 대답하기’를 켜면 그 글자만 서버를 거쳐 AI로 보내 대답을 만들고, 대화 내용은 저장하지 않아요. 끄면 앱 안의 간단한 대답만 해요.")
                 }
                 Section("Eternal") {
                     Text("차가운 회색 그림자와 따뜻한 빛, 짙은 검정과 작은 디지털 입자. 필터는 Eternal 하나만 사용해요.").font(.footnote)
@@ -135,6 +147,7 @@ struct SettingsScreen: View {
                 }.font(.footnote)
                 Section("내 사진, 내 기기에") {
                     Text("사진과 마리모 기록은 이 iPhone의 앱 보관함에 저장돼요. 사진은 서버로 보내지 않고, 광고·분석 SDK가 없어요. 서버에는 유리병·친구·편지, 입양한 아기 편지용 사진 주제 단어, 대화 모드의 글자(켰을 때)만 오가요. 동네 친구를 찾을 때 구 이름은 Apple 지도 서비스에서 받아와요. ‘찍은 자리를 지도에 남기기’를 켜면 사진마다 찍은 위치가 이 iPhone 안에만 저장돼 지도 방명록에 보여요. 앱을 삭제하면 보관함도 사라져요. 중요한 사진은 사진 앱에 저장해 주세요.").font(.footnote)
+                    NavigationLink("개인정보 처리방침") { PrivacyScreen() }
                     Button("iPhone 설정 열기") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
                 }
                 Section { HStack { Text("SCOO").font(.headline); Spacer(); Text("0.2 · Eternal").font(.caption2).foregroundStyle(.secondary) } }
@@ -142,6 +155,19 @@ struct SettingsScreen: View {
                 .navigationTitle("작은 설정").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("완료") { dismiss() } } }
         }
+    }
+
+    private func deleteAccount() async {
+        deleting = true
+        defer { deleting = false }
+        do {
+            try await SupabaseClient.shared.deleteAccount()
+            await LocalNotifier.cancelAll()
+            loginNote = "계정을 지웠어요. 다시 서버에 연결하면 새 익명 계정으로 시작해요."
+        } catch {
+            loginNote = error.localizedDescription
+        }
+        await refreshAccount()
     }
 
     private func updateAlerts(_ on: Bool) async {
