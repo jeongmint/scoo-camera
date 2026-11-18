@@ -79,7 +79,7 @@ extension Species {
         Species(id: "bosong", name: "보송", assetName: "Species-bosong"),
         Species(id: "cabi", name: "캐비", assetName: "Species-cabi"),
         Species(id: "chiru", name: "치루", assetName: "Species-chiru", daisy: DaisySpot(x: 0.26, belowEars: true, drop: 0.25)),
-        Species(id: "cro", name: "크로", assetName: "Species-cro"),
+        Species(id: "sena", name: "세나", assetName: "Species-sena"),
         Species(id: "inky", name: "잉키", assetName: "Species-inky"),
         Species(id: "momo", name: "모모", assetName: "Species-momo"),
         Species(id: "mumu", name: "무무", assetName: "Species-mumu"),

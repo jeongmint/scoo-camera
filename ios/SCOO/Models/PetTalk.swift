@@ -65,7 +65,7 @@ struct TalkPet: Equatable {
         "bosong": Look(kind: "분홍 리본을 맨 보송보송 친구", tint: (0.95, 0.78, 0.80), pitch: 1.45),
         "cabi": Look(kind: "보랏빛 적양배추", tint: (0.62, 0.36, 0.62), pitch: 1.25),
         "chiru": Look(kind: "꼬리가 복슬한 친칠라", tint: (0.64, 0.64, 0.72), pitch: 1.5),
-        "cro": Look(kind: "버터 향 크루아상", tint: (0.92, 0.62, 0.30), pitch: 1.35),
+        "sena": Look(kind: "돌돌 말린 시나몬롤", tint: (0.90, 0.60, 0.30), pitch: 1.4),
         "inky": Look(kind: "깃펜을 꽂은 잉크병", tint: (0.30, 0.32, 0.56), pitch: 1.15),
         "momo": Look(kind: "말랑한 복숭아", tint: (0.98, 0.66, 0.56), pitch: 1.45),
         "mumu": Look(kind: "잎이 싱싱한 순무", tint: (0.90, 0.62, 0.74), pitch: 1.3),
