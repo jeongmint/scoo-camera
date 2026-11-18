@@ -105,6 +105,7 @@ struct SettingsScreen: View {
                             if let code = social.profile?.friend_code {
                                 LabeledContent("내 친구 코드", value: code)
                             }
+                            NavigationLink("차단한 사람") { BlockedScreen() }
                             Button(deleting ? "지우는 중…" : "계정 삭제", role: .destructive) { confirmDelete = true }
                                 .disabled(deleting)
                                 .confirmationDialog("계정을 지울까요?", isPresented: $confirmDelete, titleVisibility: .visible) {

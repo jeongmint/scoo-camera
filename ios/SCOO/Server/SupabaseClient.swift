@@ -72,6 +72,10 @@ actor SupabaseClient {
                 return "카카오 앱에서 OpenID Connect를 켜 주세요. (카카오 로그인 → 고급)"
             case .http(_, let body) where body.lowercased().contains("user email"):
                 return "로그인한 계정에서 이메일을 받지 못했어요. 이메일 제공에 동의해 주세요."
+            case .http(_, let body) where body.contains("photo limit reached"):
+                return "사진은 하루 50장까지 보낼 수 있어요."
+            case .http(_, let body) where body.contains("photo not found"):
+                return "사진을 올리지 못했어요. 다시 보내 주세요."
             case .http(429, _):
                 return "오늘은 새 그림을 충분히 그렸어요. 내일 또 그려 줄게요."
             case .http(_, let body) where body.lowercased().contains("anonymous sign-ins are disabled"):
@@ -238,6 +242,11 @@ actor SupabaseClient {
         return try Self.decoder.decode(T.self, from: data)
     }
 
+    /// Calls a Postgres function that returns nothing.
+    func call(rpc name: String, _ params: [String: Any]) async throws {
+        _ = try await call("rest/v1/rpc/\(name)", method: "POST", body: params)
+    }
+
     /// Reads rows (`/rest/v1/<pathAndQuery>`).
     func select<T: Decodable>(_ pathAndQuery: String, as type: T.Type) async throws -> T {
         let data = try await call("rest/v1/\(pathAndQuery)", method: "GET", body: nil)
@@ -247,6 +256,32 @@ actor SupabaseClient {
     /// Updates rows (`PATCH /rest/v1/<pathAndQuery>`); row level security decides which rows.
     func update(_ pathAndQuery: String, _ body: [String: Any]) async throws {
         _ = try await call("rest/v1/\(pathAndQuery)", method: "PATCH", body: body)
+    }
+
+    /// Uploads a file to Storage (`/storage/v1/object/<bucket>/<path>`) as the signed-in user; policies decide where.
+    func upload(bucket: String, path: String, data: Data, contentType: String) async throws {
+        guard let key = SupabaseConfig.anonKey else { throw ServerError.notConfigured }
+        let session = try await signIn()
+        var request = URLRequest(url: URL(string: "storage/v1/object/\(bucket)/\(path)", relativeTo: SupabaseConfig.url)!)
+        request.httpMethod = "POST"
+        request.setValue(key, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        request.httpBody = data
+        let (answer, response) = try await urlSession.data(for: request)
+        try Self.check(response, answer)
+    }
+
+    /// Reads a private Storage file the signed-in user may see.
+    func download(bucket: String, path: String) async throws -> Data {
+        guard let key = SupabaseConfig.anonKey else { throw ServerError.notConfigured }
+        let session = try await signIn()
+        var request = URLRequest(url: URL(string: "storage/v1/object/authenticated/\(bucket)/\(path)", relativeTo: SupabaseConfig.url)!)
+        request.setValue(key, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await urlSession.data(for: request)
+        try Self.check(response, data)
+        return data
     }
 
     /// Calls an Edge Function (`/functions/v1/<name>`) as the signed-in user.

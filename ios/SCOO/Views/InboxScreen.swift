@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 import UIKit
 
 /// 편지함: letters from friends, news from babies that left in bottles, and bottles waiting to be opened.
@@ -254,6 +255,10 @@ struct ChatScreen: View {
     @State private var draft = ""
     @State private var sending = false
     @State private var error: String?
+    @State private var pickedPhoto: PhotosPickerItem?
+    @State private var reporting: ChatMessage?
+    @State private var confirmBlock = false
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(spacing: 0) {
@@ -264,7 +269,12 @@ struct ChatScreen: View {
                             Text("\(friend.name)에게 첫 편지를 보내 보세요.").font(.footnote).foregroundStyle(.secondary).padding(.top, 40)
                         }
                         ForEach(letters) { letter in
-                            Bubble(letter: letter).id(letter.id)
+                            Bubble(letter: letter, social: social).id(letter.id)
+                                .contextMenu {
+                                    if !letter.mine {
+                                        Button("신고하기", systemImage: "exclamationmark.bubble") { reporting = letter }
+                                    }
+                                }
                         }
                     }
                     .padding(16)
@@ -279,6 +289,49 @@ struct ChatScreen: View {
         .foregroundStyle(Palette.ink)
         .navigationTitle(friend.name)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button("차단하기", systemImage: "hand.raised", role: .destructive) { confirmBlock = true }
+                } label: { Image(systemName: "ellipsis.circle") }
+                    .accessibilityLabel("더 보기")
+            }
+        }
+        .confirmationDialog("이 편지를 신고할까요?", isPresented: Binding(get: { reporting != nil }, set: { if !$0 { reporting = nil } }),
+                            titleVisibility: .visible, presenting: reporting) { letter in
+            Button("신고하고 차단하기", role: .destructive) { report(letter, block: true) }
+            Button("신고만 하기") { report(letter, block: false) }
+            Button("취소", role: .cancel) { }
+        } message: { _ in
+            Text("신고한 편지는 검토를 위해 보관돼요. 차단하면 친구가 끊기고 서로 편지와 친구 요청을 보낼 수 없어요.")
+        }
+        .confirmationDialog("\(friend.name)을(를) 차단할까요?", isPresented: $confirmBlock, titleVisibility: .visible) {
+            Button("차단하기", role: .destructive) {
+                Task {
+                    do { try await social.block(friend); dismiss() } catch { self.error = error.localizedDescription }
+                }
+            }
+            Button("취소", role: .cancel) { }
+        } message: {
+            Text("친구가 끊기고 서로 편지와 친구 요청을 보낼 수 없어요. 설정 → 차단한 사람에서 풀 수 있어요.")
+        }
+        .onChange(of: pickedPhoto) { _, item in
+            guard let item else { return }
+            pickedPhoto = nil
+            sending = true
+            Task {
+                defer { sending = false }
+                do {
+                    guard let raw = try await item.loadTransferable(type: Data.self), let photo = LetterPhoto.prepare(raw) else {
+                        throw SCOOError.message("사진을 불러오지 못했어요.")
+                    }
+                    try await social.send(to: friend, body: nil, sticker: nil, photo: photo)
+                    await load()
+                } catch {
+                    self.error = error.localizedDescription
+                }
+            }
+        }
         .task {
             while !Task.isCancelled {
                 await load()
@@ -300,6 +353,11 @@ struct ChatScreen: View {
                 Image(systemName: "face.smiling").font(.title3)
             }
             .accessibilityLabel("캐릭터 스티커 보내기")
+            PhotosPicker(selection: $pickedPhoto, matching: .images) {
+                Image(systemName: "photo").font(.title3)
+            }
+            .disabled(sending)
+            .accessibilityLabel("사진 보내기")
             TextField("편지 쓰기", text: $draft, axis: .vertical)
                 .lineLimit(1...4)
                 .padding(.horizontal, 12).padding(.vertical, 8)
@@ -324,6 +382,17 @@ struct ChatScreen: View {
         }
     }
 
+    private func report(_ letter: ChatMessage, block: Bool) {
+        Task {
+            do {
+                try await social.report(letter, reason: letter.photo != nil ? "사진" : "편지", block: block)
+                if block { dismiss() } else { error = "신고했어요. 고마워요." }
+            } catch {
+                self.error = error.localizedDescription
+            }
+        }
+    }
+
     private func send(body: String?, sticker: String?) {
         let text = body?.trimmingCharacters(in: .whitespacesAndNewlines)
         sending = true
@@ -342,10 +411,14 @@ struct ChatScreen: View {
 
 private struct Bubble: View {
     let letter: ChatMessage
+    @ObservedObject var social: SocialStore
     var body: some View {
         HStack {
             if letter.mine { Spacer(minLength: 50) }
             VStack(alignment: letter.mine ? .trailing : .leading, spacing: 4) {
+                if let path = letter.photo {
+                    LetterPhotoView(path: path, social: social)
+                }
                 if let sticker = letter.sticker, let species = Species.find(sticker) {
                     SpeciesPortrait(species: species).frame(width: 96, height: 96)
                 }
@@ -358,5 +431,58 @@ private struct Bubble: View {
             }
             if !letter.mine { Spacer(minLength: 50) }
         }
+    }
+}
+
+/// A photo in a friend letter, loaded from the private bucket.
+private struct LetterPhotoView: View {
+    let path: String
+    @ObservedObject var social: SocialStore
+    @State private var image: UIImage?
+    @State private var failed = false
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else if failed {
+                Label("볼 수 없는 사진", systemImage: "eye.slash").font(.caption).foregroundStyle(.secondary)
+            } else {
+                ProgressView()
+            }
+        }
+        .frame(width: 200, height: 200)
+        .background(.white.opacity(0.6))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .task(id: path) {
+            if let data = await social.photo(path), let loaded = UIImage(data: data) { image = loaded } else { failed = true }
+        }
+        .accessibilityLabel("사진")
+    }
+}
+
+/// People I blocked, to unblock them.
+struct BlockedScreen: View {
+    @StateObject private var social = SocialStore()
+
+    var body: some View {
+        List {
+            if social.blocked.isEmpty {
+                Text("차단한 사람이 없어요.").font(.footnote).foregroundStyle(.secondary)
+            }
+            ForEach(social.blocked) { row in
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(row.nickname ?? "이름 없는 친구")
+                        Text(row.blocked_at.formatted(date: .abbreviated, time: .omitted)).font(.caption2).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("차단 풀기") { Task { await social.unblock(row) } }.buttonStyle(.bordered)
+                }
+            }
+        }
+        .scrollContentBackground(.hidden).background(Palette.cream)
+        .navigationTitle("차단한 사람").navigationBarTitleDisplayMode(.inline)
+        .task { await social.loadBlocked() }
     }
 }
