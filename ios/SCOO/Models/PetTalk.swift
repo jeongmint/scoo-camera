@@ -38,7 +38,7 @@ struct TalkPet: Equatable {
         "kuru": Look(kind: "몽실몽실 흰 구름", tint: (0.58, 0.78, 0.96), pitch: 1.3),
         "nyamo": Look(kind: "통통한 치즈 고양이", tint: (0.96, 0.72, 0.52), pitch: 1.4),
         "happy": Look(kind: "초록 목도리를 한 눈사람", tint: (0.62, 0.78, 0.56), pitch: 1.2),
-        "baseball": Look(kind: "빨간 실밥 야구공", tint: (0.86, 0.32, 0.30), pitch: 1.35),
+        "baseball": Look(kind: "빨간 실밥 야구공 츄츄", tint: (0.86, 0.32, 0.30), pitch: 1.35),
         "chiko": Look(kind: "볼이 통통한 다람쥐", tint: (0.93, 0.66, 0.38), pitch: 1.5),
         "deogi": Look(kind: "귀가 축 처진 강아지", tint: (0.82, 0.62, 0.40), pitch: 1.25),
         "dia": Look(kind: "새빨간 사과", tint: (0.88, 0.22, 0.24), pitch: 1.4),
