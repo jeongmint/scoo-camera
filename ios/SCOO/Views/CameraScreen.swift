@@ -185,7 +185,7 @@ struct CameraScreen: View {
             switch value {
             case .album: AlbumScreen().environmentObject(garden)
             case .garden: GardenScreen().environmentObject(garden)
-            case .settings: SettingsScreen()
+            case .settings: SettingsScreen().presentationBackground(.ultraThinMaterial).preferredColorScheme(.dark)
             case .map: PlaceMapScreen().environmentObject(garden)
             }
         }

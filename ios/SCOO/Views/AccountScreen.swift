@@ -26,7 +26,7 @@ struct AccountScreen: View {
                         .font(.footnote).foregroundStyle(.secondary)
                 } else if accountID == nil {
                     Button { Task { await connect() } } label: {
-                        Text(connecting ? "연결 중…" : "익명으로 시작하기").loginLabel(fill: Palette.moss, text: .white)
+                        Text(connecting ? "연결 중…" : "익명으로 시작하기").loginLabel(fill: Palette.sage, text: .white)
                     }
                     .buttonStyle(.plain).disabled(connecting)
                 } else if anonymous {
@@ -42,7 +42,7 @@ struct AccountScreen: View {
             }
             .padding(24)
         }
-        .background(Palette.cream.ignoresSafeArea())
+        .glassSheet()
         .navigationTitle("계정").navigationBarTitleDisplayMode(.inline)
         .task { await refreshAccount() }
     }
@@ -51,7 +51,7 @@ struct AccountScreen: View {
         VStack(spacing: 8) {
             Image("Companion-mori").resizable().scaledToFit().frame(width: 96, height: 96)
             Text(anonymous ? "친구들을 잃어버리지 않게" : "계정이 지켜지고 있어요")
-                .font(.title3.weight(.semibold)).foregroundStyle(Palette.ink)
+                .font(.title3.weight(.semibold))
             Text(accountLabel).font(.footnote).foregroundStyle(.secondary)
             if anonymous && accountID != nil {
                 Text("\(loginNames) 중 하나로 이어 두면 앱을 지우거나 폰을 바꿔도 친구·유리병·편지가 그대로 남아요.")
@@ -101,13 +101,13 @@ struct AccountScreen: View {
             if let code = social.profile?.friend_code { LabeledContent("내 친구 코드", value: code) }
         }
         .padding(16)
-        .background(.white.opacity(0.7), in: RoundedRectangle(cornerRadius: 16))
+        .background(Glass.row, in: RoundedRectangle(cornerRadius: 16))
     }
 
     private var manageCard: some View {
         VStack(spacing: 0) {
             NavigationLink { BlockedScreen() } label: {
-                HStack { Text("차단한 사람").foregroundStyle(Palette.ink); Spacer(); Image(systemName: "chevron.right").foregroundStyle(.tertiary) }
+                HStack { Text("차단한 사람"); Spacer(); Image(systemName: "chevron.right").foregroundStyle(.tertiary) }
                     .padding(16)
             }
             Divider().padding(.leading, 16)
@@ -122,7 +122,7 @@ struct AccountScreen: View {
                 Text("친구·편지·유리병 기록이 서버에서 바로 지워지고 되돌릴 수 없어요. 이미 다른 사람에게 도착한 아기는 그 사람에게 남아요. 이 iPhone의 사진은 그대로예요.")
             }
         }
-        .background(.white.opacity(0.7), in: RoundedRectangle(cornerRadius: 16))
+        .background(Glass.row, in: RoundedRectangle(cornerRadius: 16))
     }
 
     private func deleteAccount() async {
@@ -213,5 +213,19 @@ private extension Text {
             .foregroundStyle(text)
             .background(fill, in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.black.opacity(stroke ? 0.2 : 0)))
+    }
+}
+
+/// Settings sheets float over the live camera as dark glass instead of a cream page.
+enum Glass {
+    static let row = Color.white.opacity(0.12)
+}
+
+extension View {
+    func glassSheet() -> some View {
+        scrollContentBackground(.hidden)
+            .background(Color.clear)
+            .tint(Palette.sage)
+            .environment(\.colorScheme, .dark)
     }
 }
