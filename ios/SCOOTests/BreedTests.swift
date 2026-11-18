@@ -6,8 +6,8 @@ final class BreedTests: XCTestCase {
     // MARK: Family
 
     func testFamilyHasTwentyFiveWithImages() {
-        XCTAssertEqual(Species.all.count, 42)
-        XCTAssertEqual(Set(Species.all.map(\.id)).count, 42)
+        XCTAssertEqual(Species.all.count, 41)
+        XCTAssertEqual(Set(Species.all.map(\.id)).count, 41)
         XCTAssertEqual(Species.all.filter(\.isEvent).map(\.id), ["happy", "bomi", "soru", "doto"])
         XCTAssertTrue(Species.all.filter(\.isEvent).allSatisfy { $0.season != nil }, "이벤트 친구는 모두 계절 친구")
         for species in Species.all {
@@ -20,7 +20,7 @@ final class BreedTests: XCTestCase {
         let mine = ["kuru", "happy"].compactMap(Species.find)
         XCTAssertEqual(Species.owned(mine, unlockAll: false).map(\.id), ["kuru", "happy"])
         XCTAssertEqual(Species.owned([], unlockAll: false), [])
-        XCTAssertEqual(Species.owned([], unlockAll: true).count, 42)
+        XCTAssertEqual(Species.owned([], unlockAll: true).count, 41)
     }
 
     // MARK: Rules

@@ -77,7 +77,6 @@ extension Species {
         Species(id: "lumi", name: "루미", assetName: "Species-lumi"),
         // 서울 한정 동네 친구 (2026-11-18)
         Species(id: "bosong", name: "보송", assetName: "Species-bosong"),
-        Species(id: "cabi", name: "캐비", assetName: "Species-cabi"),
         Species(id: "chiru", name: "치루", assetName: "Species-chiru", daisy: DaisySpot(x: 0.26, belowEars: true, drop: 0.25)),
         Species(id: "cro", name: "크로", assetName: "Species-cro"),
         Species(id: "inky", name: "잉키", assetName: "Species-inky"),
