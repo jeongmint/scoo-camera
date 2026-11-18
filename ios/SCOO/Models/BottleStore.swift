@@ -14,7 +14,10 @@ protocol BottleBackend {
 /// Bottles sent and received. Babies move between this and `BreedStore`: sending removes one, opening adopts one.
 @MainActor
 final class BottleStore: ObservableObject {
-    @Published private(set) var bottles: [Bottle] = []
+    @Published private(set) var bottles: [Bottle] = [] {
+        // Keep the phone's own arrival and letter notifications in step with the bottles.
+        didSet { if bottles != oldValue { let current = bottles; Task { await LocalNotifier.reschedule(current) } } }
+    }
     @Published var message: String?
     @Published private(set) var busy = false
     let backend: BottleBackend
@@ -54,6 +57,12 @@ final class BottleStore: ObservableObject {
         let origin = baby.origin ?? district ?? "서울 어딘가"
         bottles = try await backend.send(baby, origin: origin, wantsNews: wantsNews, fast: fast, now: now, current: bottles)
         try breeds.remove(baby.id)
+        // The first bottle is the moment to ask: "tell me when it arrives / when the baby writes".
+        let current = bottles
+        Task {
+            await LocalNotifier.askIfNeeded()
+            await LocalNotifier.reschedule(current)
+        }
     }
 
     /// Opens an arrived bottle and takes the baby in.
