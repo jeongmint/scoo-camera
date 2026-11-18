@@ -23,9 +23,8 @@ struct InboxScreen: View {
 
     /// The character floating in my camera, shown to friends next to my letters.
     private var myHero: String {
-        guard let picked = Companion(rawValue: companionRaw), let assigned = Companion(rawValue: assignedRaw),
-              Companion.owned(assigned: assigned).contains(picked) else { return "mori" }
-        return picked.rawValue
+        guard let picked = Species.find(companionRaw), FriendStore.shared.owns(picked.id) else { return "mori" }
+        return picked.id
     }
 
     var body: some View {
@@ -186,7 +185,7 @@ struct InboxScreen: View {
         }
         ForEach(letters) { letter in
             HStack(alignment: .top, spacing: 12) {
-                BreedPortrait(breed: letter.bottle.baby).frame(width: 46, height: 46)
+                BottleFace(bottle: letter.bottle).frame(width: 46, height: 46)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(letter.text).font(.subheadline)
                     Text("\(letter.bottle.title) · \(letter.date.formatted(date: .abbreviated, time: .shortened))")

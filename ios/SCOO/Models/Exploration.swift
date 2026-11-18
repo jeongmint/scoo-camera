@@ -1,9 +1,9 @@
 import Foundation
 
-/// 동네 탐험: the first photo taken in a 시군구 you have not visited yet meets the friend who lives there,
-/// if you have not met it before. Each friend lives in several places, so rare friends need a trip.
-/// Kept on the device (UserDefaults).
+/// 동네 탐험: the first photo taken in a 시군구 you have not visited yet stamps it in the collection.
+/// Characters are no longer met this way; they come from glass bottles. Kept on the device (UserDefaults).
 struct Exploration: Codable, Equatable {
+    /// Friends met while exploring, from before exploring only stamped (kept so they can move to the friend list).
     struct Meeting: Codable, Equatable {
         let species: String
         /// Region id ("서울 마포구"); records from the Seoul-only days hold just "마포구".
@@ -13,32 +13,15 @@ struct Exploration: Codable, Equatable {
         var place: String { Regions.resolve(district)?.title ?? district }
     }
 
-    /// What a photo in a place brought.
-    enum Visit: Equatable {
-        /// First time here, and its friend is new.
-        case met(Species)
-        /// First time here, but its friend was met before (somewhere else, or it is the user's own friend).
-        case stamped(Species?)
-        /// Been here before.
-        case again
-    }
-
     /// Region id → first visit.
     var visited: [String: Date] = [:]
-    /// Friends met by exploring, in the order they were met.
     var met: [Meeting] = []
 
-    var collected: Set<String> { Set(met.map(\.species)) }
-
-    /// Records a photo in `region`. `others` are species already owned another way (the drawn friend, event
-    /// friends), so they are not met twice.
-    mutating func visit(_ region: Region, owned others: Set<String>, now: Date) -> Visit {
-        guard visited[region.id] == nil else { return .again }
+    /// Records a photo in `region`. True when it is the first visit (a new stamp).
+    mutating func visit(_ region: Region, now: Date) -> Bool {
+        guard visited[region.id] == nil else { return false }
         visited[region.id] = now
-        guard let local = region.friend else { return .stamped(nil) }
-        if collected.union(others).contains(local.id) { return .stamped(local) }
-        met.append(Meeting(species: local.id, district: region.id, date: now))
-        return .met(local)
+        return true
     }
 
     /// Visited places counted per province, for the collection screen.
@@ -62,14 +45,13 @@ struct Exploration: Codable, Equatable {
         if let data = try? JSONEncoder().encode(self) { defaults.set(data, forKey: Self.key) }
     }
 
-    /// Visits a place and saves the result.
+    /// Visits a place and saves the result. True when it was a new stamp.
     @discardableResult
-    static func record(_ region: Region, owned others: Set<String>, defaults: UserDefaults = .standard,
-                       now: Date = Date()) -> Visit {
+    static func record(_ region: Region, defaults: UserDefaults = .standard, now: Date = Date()) -> Bool {
         var state = load(from: defaults)
-        let result = state.visit(region, owned: others, now: now)
+        let stamped = state.visit(region, now: now)
         state.save(to: defaults)
-        return result
+        return stamped
     }
 
     /// Before regions went nationwide, places were stored as bare Seoul district names ("마포구").

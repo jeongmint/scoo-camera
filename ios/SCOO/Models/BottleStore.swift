@@ -11,10 +11,25 @@ protocol BottleBackend {
     func open(_ bottle: Bottle, now: Date, current: [Bottle]) async throws -> [Bottle]
     /// Words the new families shared for babies this account sent away; nil on the simulated sea.
     func moments() async throws -> [BottleMoment]?
+    /// Nobody came for this bottle in time: marks it settled so the sea can bring a new character instead.
+    /// True only once, and only when it is due.
+    func settle(_ bottle: Bottle, fast: Bool, now: Date, current: [Bottle]) async throws -> (Bool, [Bottle])
 }
 
 extension BottleBackend {
     func moments() async throws -> [BottleMoment]? { nil }
+}
+
+/// What came out of an opened bottle.
+enum BottleGift: Identifiable, Equatable {
+    case baby(Breed)
+    case character(Species)
+    var id: String {
+        switch self {
+        case .baby(let baby): return baby.id.uuidString
+        case .character(let species): return species.id
+        }
+    }
 }
 
 /// Bottles sent and received. Babies move between this and `BreedStore`: sending removes one, opening adopts one.
@@ -34,8 +49,9 @@ final class BottleStore: ObservableObject {
         self.backend = backend
     }
 
-    convenience init(directory: URL = PhotoRepository.directory, ocean: BottleOcean = LocalOcean()) {
-        self.init(backend: LocalBottleBackend(directory: directory, ocean: ocean))
+    convenience init(directory: URL = PhotoRepository.directory, ocean: BottleOcean = LocalOcean(),
+                     luck: @escaping (UUID) -> Bool = LocalBottleBackend.someoneCame) {
+        self.init(backend: LocalBottleBackend(directory: directory, ocean: ocean, luck: luck))
     }
 
     /// The server when it is configured and the user wants real people, otherwise the simulated sea.
@@ -61,8 +77,58 @@ final class BottleStore: ObservableObject {
         backend.isOnline || BottleRules.canSend(bottles, now: now, fast: fast)
     }
 
+    /// Whether someone with this many characters and babies may send one: never the last one.
+    static func canPart(friends: Int, babies: Int) -> Bool { friends + babies >= 2 }
+
+    /// Puts one of my characters in a bottle (it leaves my list). The last one stays.
+    func send(_ friend: OwnedFriend, wantsNews: Bool, from district: String?, friends: FriendStore, babies: Int,
+              fast: Bool, now: Date = Date()) async throws {
+        guard friend.canTravel else { throw SCOOError.message("이벤트 친구는 유리병을 탈 수 없어요.") }
+        guard Self.canPart(friends: friends.friends.count, babies: babies) else {
+            throw SCOOError.message("마지막 한 마리는 보낼 수 없어요.")
+        }
+        guard canSend(now: now, fast: fast) else { throw SCOOError.message("유리병은 하루에 \(BottleRules.dailySends)번 띄울 수 있어요.") }
+        busy = true
+        defer { busy = false }
+        let traveller = Breed(id: friend.id, parentA: friend.species, parentB: friend.species, born: friend.since, bornAtMoment: 0,
+                              origin: friend.origin)
+        bottles = try await backend.send(traveller, origin: district.flatMap { Regions.resolve($0)?.title } ?? friend.origin ?? "어딘가",
+                                         wantsNews: wantsNews, fast: fast, now: now, current: bottles)
+        friends.remove(friend.id)
+        askForNotifications()
+    }
+
+    private func askForNotifications() {
+        // The first bottle is the moment to ask: "tell me when it arrives / when the baby writes".
+        let current = bottles
+        Task {
+            await LocalNotifier.askIfNeeded()
+            await LocalNotifier.reschedule(current)
+        }
+    }
+
+    /// Bottles I sent that nobody came for by the next day: the sea brings a new character for each,
+    /// one of the 5 of `home` the user does not have yet if possible. Returns what came.
+    @discardableResult
+    func settleWaiting(home: Region?, friends: FriendStore, fast: Bool, now: Date = Date()) async -> [Species] {
+        var came: [Species] = []
+        for bottle in bottles where bottle.direction == .outgoing && bottle.isWaitingAtSea && bottle.settled != true
+            && bottle.sentAt.addingTimeInterval(BottleRules.travelTime(fast: fast)) <= now {
+            guard let result = try? await backend.settle(bottle, fast: fast, now: now, current: bottles) else { continue }
+            bottles = result.1
+            guard result.0 else { continue }
+            var generator = SystemRandomNumberGenerator()
+            let species = friends.seaFriend(near: home, using: &generator)
+            friends.add(species, how: .sea, origin: home?.title, now: now)
+            came.append(species)
+        }
+        return came
+    }
+
     /// Puts a baby in a bottle.
-    func send(_ baby: Breed, wantsNews: Bool, from district: String?, breeds: BreedStore, fast: Bool, now: Date = Date()) async throws {
+    func send(_ baby: Breed, wantsNews: Bool, from district: String?, breeds: BreedStore, friends: Int, fast: Bool,
+              now: Date = Date()) async throws {
+        guard Self.canPart(friends: friends, babies: breeds.breeds.count) else { throw SCOOError.message("마지막 한 마리는 보낼 수 없어요.") }
         guard canSend(now: now, fast: fast) else { throw SCOOError.message("유리병은 하루에 \(BottleRules.dailySends)번 띄울 수 있어요.") }
         busy = true
         defer { busy = false }
@@ -72,17 +138,12 @@ final class BottleStore: ObservableObject {
                                born: baby.born, bornAtMoment: baby.bornAtMoment, origin: baby.origin, adopted: baby.adopted)
         bottles = try await backend.send(travelling, origin: origin, wantsNews: wantsNews, fast: fast, now: now, current: bottles)
         try breeds.remove(baby.id)
-        // The first bottle is the moment to ask: "tell me when it arrives / when the baby writes".
-        let current = bottles
-        Task {
-            await LocalNotifier.askIfNeeded()
-            await LocalNotifier.reschedule(current)
-        }
+        askForNotifications()
     }
 
-    /// Opens an arrived bottle and takes the baby in.
+    /// Opens an arrived bottle: a character joins my friends, a baby joins my babies.
     @discardableResult
-    func open(_ bottle: Bottle, breeds: BreedStore, moments: Int, now: Date = Date()) async throws -> Breed {
+    func open(_ bottle: Bottle, breeds: BreedStore, friends: FriendStore, moments: Int, now: Date = Date()) async throws -> BottleGift {
         // Check the stored bottle, not the caller's copy, so a bottle can only be opened once.
         guard let stored = bottles.first(where: { $0.id == bottle.id }),
               stored.direction == .incoming, stored.hasArrived(at: now), !stored.opened else {
@@ -91,10 +152,14 @@ final class BottleStore: ObservableObject {
         busy = true
         defer { busy = false }
         bottles = try await backend.open(stored, now: now, current: bottles)
+        if let species = stored.character {
+            friends.add(species, how: .adopted, origin: stored.origin, now: now)
+            return .character(species)
+        }
         let baby = Breed(id: stored.id, parentA: stored.parentA, parentB: stored.parentB, born: now, bornAtMoment: moments,
                          origin: stored.origin, adopted: true)
         try breeds.adopt(baby)
-        return baby
+        return .baby(baby)
     }
 }
 
@@ -104,11 +169,14 @@ final class BottleStore: ObservableObject {
 struct LocalBottleBackend: BottleBackend {
     let url: URL
     let ocean: BottleOcean
+    /// Whether someone on the simulated sea swaps for a given bottle (injectable for tests).
+    let luck: (UUID) -> Bool
     var isOnline: Bool { false }
 
-    init(directory: URL, ocean: BottleOcean) {
+    init(directory: URL, ocean: BottleOcean, luck: @escaping (UUID) -> Bool = LocalBottleBackend.someoneCame) {
         url = directory.appendingPathComponent("bottles.json")
         self.ocean = ocean
+        self.luck = luck
     }
 
     func load() async throws -> [Bottle] {
@@ -117,12 +185,38 @@ struct LocalBottleBackend: BottleBackend {
     }
 
     func send(_ baby: Breed, origin: String, wantsNews: Bool, fast: Bool, now: Date, current: [Bottle]) async throws -> [Bottle] {
-        let outgoing = Bottle(id: UUID(), direction: .outgoing, parentA: baby.parentA, parentB: baby.parentB, origin: origin,
+        var outgoing = Bottle(id: UUID(), direction: .outgoing, parentA: baby.parentA, parentB: baby.parentB, origin: origin,
                               sentAt: now, arrivesAt: now.addingTimeInterval(BottleRules.travelTime(fast: fast)), wantsNews: wantsNews)
-        let incoming = ocean.bottleInReturn(for: outgoing, fast: fast)
-        let next = [incoming, outgoing] + current
+        // About half the time someone on the simulated sea swaps; otherwise the bottle waits and the sea
+        // brings a new character the next day.
+        var next = current
+        if luck(outgoing.id) {
+            next.insert(ocean.bottleInReturn(for: outgoing, fast: fast), at: 0)
+        } else {
+            outgoing.arrivesAt = .distantFuture
+        }
+        next.insert(outgoing, at: 0)
         try write(next)
         return next
+    }
+
+    /// The same bottle always has the same luck.
+    static func someoneCame(_ id: UUID) -> Bool {
+        var generator = StableGenerator(seed: StableGenerator.seed(id) &+ 7)
+        return Double.random(in: 0..<1, using: &generator) < 0.5
+    }
+
+    func settle(_ bottle: Bottle, fast: Bool, now: Date, current: [Bottle]) async throws -> (Bool, [Bottle]) {
+        var next = current
+        guard let index = next.firstIndex(where: { $0.id == bottle.id }), next[index].settled != true,
+              next[index].isWaitingAtSea, next[index].sentAt.addingTimeInterval(BottleRules.travelTime(fast: fast)) <= now else {
+            return (false, current)
+        }
+        // someone on the sea adopts it after all (so its letters can come), and it counts as settled
+        next[index].settled = true
+        next[index].arrivesAt = now
+        try write(next)
+        return (true, next)
     }
 
     func open(_ bottle: Bottle, now: Date, current: [Bottle]) async throws -> [Bottle] {
@@ -157,6 +251,8 @@ struct SupabaseBottleBackend: BottleBackend {
         let sent_at: Date
         let arrives_at: Date?
         let opened: Bool
+        /// Added with the adoption rework; older servers leave it out.
+        let settled: Bool?
     }
 
     func moments() async throws -> [BottleMoment]? {
@@ -171,8 +267,13 @@ struct SupabaseBottleBackend: BottleBackend {
             // A bottle still waiting at sea for a partner has no arrival time yet.
             Bottle(id: row.id, direction: row.direction == "incoming" ? .incoming : .outgoing,
                    parentA: row.parent_a, parentB: row.parent_b, origin: row.origin, sentAt: row.sent_at,
-                   arrivesAt: row.arrives_at ?? .distantFuture, wantsNews: row.wants_news, opened: row.opened)
+                   arrivesAt: row.arrives_at ?? .distantFuture, wantsNews: row.wants_news, opened: row.opened, settled: row.settled)
         }
+    }
+
+    func settle(_ bottle: Bottle, fast: Bool, now: Date, current: [Bottle]) async throws -> (Bool, [Bottle]) {
+        let settled = try await client.rpc("settle_bottle", ["p_id": bottle.id.uuidString, "p_fast": fast], as: Bool.self)
+        return (settled, try await load())
     }
 
     func send(_ baby: Breed, origin: String, wantsNews: Bool, fast: Bool, now: Date, current: [Bottle]) async throws -> [Bottle] {

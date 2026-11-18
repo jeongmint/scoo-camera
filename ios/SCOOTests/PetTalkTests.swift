@@ -36,9 +36,12 @@ final class PetTalkTests: XCTestCase {
         let mori = TalkPet.of(nil, moriName: "포근한 모리", personality: "먹보")
         XCTAssertEqual(mori.name, "포근한 모리")
         XCTAssertEqual(mori.personality, "먹보")
-        let nyamo = TalkPet.of(.nyamo, moriName: "포근한 모리", personality: "먹보")
+        let nyamo = TalkPet.of(Species.find("nyamo"), moriName: "포근한 모리", personality: "먹보")
         XCTAssertEqual(nyamo.name, "냐모")
         XCTAssertNotEqual(nyamo.tint.red, mori.tint.red)
-        XCTAssertEqual(TalkPet.of(.mori, moriName: "콩", personality: "x").name, "모리")
+        XCTAssertEqual(TalkPet.of(Species.find("mori"), moriName: "콩", personality: "x").name, "모리")
+        for species in Species.all {
+            XCTAssertEqual(TalkPet.of(species, moriName: "콩", personality: "x").name, species.id == "mori" ? "모리" : species.name)
+        }
     }
 }

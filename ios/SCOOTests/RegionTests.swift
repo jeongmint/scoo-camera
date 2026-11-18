@@ -10,7 +10,9 @@ final class RegionTests: XCTestCase {
         XCTAssertTrue(Regions.all.allSatisfy { $0.friend?.isEvent == false }, "the snowman is an event friend, not a local one")
         let living = Set(Regions.all.map(\.friendID))
         XCTAssertEqual(living, Set(Species.all.filter { !$0.isEvent }.map(\.id)), "all 24 regular friends live somewhere")
-        XCTAssertEqual(Set(Regions.all.map(\.primary)), Set(Companion.regulars))
+        XCTAssertTrue(Regions.all.allSatisfy { $0.candidates.count == 5 && Set($0.candidates).count == 5 }, "다섯 친구, 겹치지 않게")
+        XCTAssertTrue(Regions.all.allSatisfy { $0.candidates.first == $0.friendID }, "그 동네 친구가 첫째")
+        XCTAssertTrue(Regions.all.allSatisfy { $0.candidateSpecies.count == 5 && !$0.candidateSpecies.contains { $0.isEvent } })
     }
 
     func testRarityHasCommonAndRareFriends() {
@@ -42,12 +44,12 @@ final class RegionTests: XCTestCase {
         XCTAssertNil(Regions.resolve("없는구"))
     }
 
-    func testHometownFriendUsuallyArrives() {
-        var generator = SystemRandomNumberGenerator()
-        let region = Regions.find("서울 강남구")!
-        let draws = (0..<2_000).map { _ in Companion.assign(in: region, using: &generator) }
-        let share = Double(draws.filter { $0 == region.primary }.count) / Double(draws.count)
-        XCTAssertEqual(share, Companion.hometownChance, accuracy: 0.05)
-        XCTAssertFalse(draws.contains(.happy))
+    func testNeighboursShareFriends() {
+        // 마포구 and 서대문구 are next to each other: their five overlap.
+        let mapo = Set(Regions.find("서울 마포구")!.candidates), seodaemun = Set(Regions.find("서울 서대문구")!.candidates)
+        XCTAssertGreaterThanOrEqual(mapo.intersection(seodaemun).count, 2)
+        XCTAssertTrue(Regions.find("제주 서귀포시")!.candidates.contains("tangerine"))
+        let counts = Dictionary(grouping: Regions.all.flatMap(\.candidates), by: { $0 }).mapValues(\.count)
+        XCTAssertEqual(counts.count, 24, "every regular character can be someone's first friend somewhere")
     }
 }

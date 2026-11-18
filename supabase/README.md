@@ -132,6 +132,7 @@ python3 scripts/generate_xcodeproj.py --paid-team
 | `20261118000100_delete_account` | 설정의 계정 삭제(`delete_my_account`). 이미 도착한 유리병의 아기는 받은 사람에게 남김 | `tests/delete_account_scenario.sql` |
 | `20261118000200_friend_photos_and_blocks` | 친구 편지 사진(비공개 `letters` 버킷, 친구끼리만), 신고·차단, 차단하면 편지·요청 막힘 | `tests/friend_photos_scenario.sql` |
 | `20261118000300_friend_presence` | 주변 친구 보기: 100m 단위 위치를 친구에게만, 30분 뒤 사라짐 | `tests/presence_scenario.sql` |
+| `20261118000400_bottle_settle` | 입양 재정비: 캐릭터도 유리병을 타요(부모 둘이 같은 종). 보낸 다음 날 짝이 없으면 `settle_bottle`로 정리하고 폰이 바다의 새 친구를 만들어요. 이미 답을 받은(settled) 병은 한쪽으로만 입양돼요 | `tests/settle_scenario.sql` |
 | `functions/breed-image` | 만개한 교배종(`b_` + 12자리) 부모 허용(재교배) | — |
 
 로컬에서는 `tests/local_storage_stubs.sql`(Storage 흉내)을 스텁 다음에 실행해요.

@@ -50,18 +50,8 @@ extension Species {
 
     static func find(_ id: String) -> Species? { all.first { $0.id == id } }
 
-    /// The species matching a camera friend (귀요·쿠르·모리·냐모·해피 share their ids).
-    init?(_ companion: Companion) {
-        guard let match = Species.find(companion.rawValue) else { return nil }
-        self = match
-    }
-
-    /// Who a user can breed with: the friend they were handed, open event friends, and friends met while exploring.
-    /// The test switch opens the whole family so every pair can be tried.
-    static func owned(assigned: Companion?, unlockAll: Bool, collected: Set<String> = []) -> [Species] {
-        if unlockAll { return all }
-        let drawn = assigned.map { Companion.owned(assigned: $0).compactMap { Species($0) } } ?? []
-        let ids = Set(drawn.map(\.id))
-        return drawn + all.filter { collected.contains($0.id) && !ids.contains($0.id) }
+    /// Who a user can breed with: the characters they have. The test switch opens the whole family.
+    static func owned(_ friends: [Species], unlockAll: Bool) -> [Species] {
+        unlockAll ? all : friends
     }
 }
