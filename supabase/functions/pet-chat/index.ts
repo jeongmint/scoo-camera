@@ -9,8 +9,14 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
+// Provider: "openai" (default, OPENAI_API_KEY) or "gemini" (GEMINI_API_KEY, Google AI Studio; its free tier is
+// for testing: limits are per project and free-tier prompts may be used by Google).
+const PROVIDER = Deno.env.get("PET_CHAT_PROVIDER") === "gemini" ? "gemini" : "openai";
+const ENDPOINT = PROVIDER === "gemini"
+  ? "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+  : "https://api.openai.com/v1/chat/completions";
 // gpt-5.4-mini with no reasoning answers in about a second (2026-11-17), quick enough for back-and-forth talk.
-const MODEL = Deno.env.get("PET_CHAT_MODEL") ?? "gpt-5.4-mini";
+const MODEL = Deno.env.get("PET_CHAT_MODEL") ?? (PROVIDER === "gemini" ? "gemini-flash-lite-latest" : "gpt-5.4-mini");
 const DAILY_LIMIT = Number(Deno.env.get("PET_CHAT_DAILY_LIMIT") ?? "300");
 const MOODS = ["smile", "surprised", "awe", "yum", "normal"];
 
@@ -47,8 +53,9 @@ function system(pet: string, kind: string, personality: string) {
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
-  const key = Deno.env.get("OPENAI_API_KEY");
-  if (!key) return json({ error: "OPENAI_API_KEY is not set" }, 500);
+  const keyName = PROVIDER === "gemini" ? "GEMINI_API_KEY" : "OPENAI_API_KEY";
+  const key = Deno.env.get(keyName);
+  if (!key) return json({ error: `${keyName} is not set` }, 500);
 
   // The gateway already verified the JWT (verify_jwt on), so its subject can be read without another round trip.
   const userId = subject(req.headers.get("Authorization") ?? "");
@@ -78,15 +85,16 @@ Deno.serve(async (req) => {
     model: MODEL,
     messages,
     response_format: { type: "json_object" },
-    max_completion_tokens: 600,
   };
+  if (PROVIDER === "gemini") request.max_tokens = 300;
+  else request.max_completion_tokens = 600;
   // Reasoning models answer fastest with the least thinking: "none" from gpt-5.1 on, "minimal" before.
   // Older chat models do not take the parameter.
-  if (/^(gpt-5|o\d)/.test(MODEL)) {
+  if (PROVIDER === "openai" && /^(gpt-5|o\d)/.test(MODEL)) {
     request.reasoning_effort = Deno.env.get("PET_CHAT_REASONING") ?? (/^gpt-5-/.test(MODEL) ? "minimal" : "none");
   }
 
-  const answer = await fetch("https://api.openai.com/v1/chat/completions", {
+  const answer = await fetch(ENDPOINT, {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify(request),
@@ -94,7 +102,7 @@ Deno.serve(async (req) => {
   const { data: count, error: countError } = await counted;
   if (countError) return json({ error: countError.message }, 500);
   if (typeof count === "number" && count > DAILY_LIMIT) return json({ error: "daily limit reached" }, 429);
-  if (!answer.ok) return json({ error: `openai ${answer.status}`, detail: (await answer.text()).slice(0, 300) }, 502);
+  if (!answer.ok) return json({ error: `${PROVIDER} ${answer.status}`, detail: (await answer.text()).slice(0, 300) }, 502);
   const data = await answer.json();
   const content: string = data?.choices?.[0]?.message?.content ?? "";
   let reply = "", mood = "smile";

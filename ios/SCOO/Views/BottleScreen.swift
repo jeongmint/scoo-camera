@@ -108,7 +108,7 @@ struct BottleScreen: View {
                             let chosen = picked == baby.id
                             Button { picked = baby.id } label: {
                                 VStack(spacing: 4) {
-                                    BreedPortrait(breed: baby, adult: baby.isAdult(moments: garden.snapshot.moments)).frame(width: 74, height: 74)
+                                    BreedPortrait(breed: baby, stage: baby.stage(moments: garden.snapshot.moments)).frame(width: 74, height: 74)
                                     Text(baby.title).font(.system(size: 10)).lineLimit(1).frame(width: 84)
                                 }
                                 .padding(8)
@@ -269,7 +269,7 @@ private struct AdoptedSheet: View {
             BreedPortrait(breed: baby).frame(width: 220, height: 220)
             Text("\(baby.origin ?? "어딘가")에서 온 아이").font(.title3.weight(.semibold))
             Text(baby.title).font(.subheadline).foregroundStyle(.secondary)
-            Text("우리 아기들에 들어왔어요. 사진을 \(BreedRules.photosToGrow)장 찍으면 데이지를 단 성체가 돼요.")
+            Text("우리 아기들에 들어왔어요. 사진을 \(BreedRules.photosToGrowing)장 찍으면 성장, \(BreedRules.photosToGrow)장이면 데이지를 단 만개가 돼요.")
                 .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
             Button("반가워!") { dismiss() }
                 .font(.headline).padding(.horizontal, 36).padding(.vertical, 12)

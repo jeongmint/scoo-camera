@@ -116,3 +116,22 @@ python3 scripts/generate_xcodeproj.py --paid-team
 - 서버는 그 계정이 **열어 본** 유리병 중 처음 가족이 '가끔 소식 전해줘'를 켠 것에만, 주제마다 하루 한 번 `bottle_moments`에 남겨요. 목록 밖 단어나 직접 쓰기는 거절해요.
 - 읽기는 처음 가족(보낸 사람)만 돼요(RLS). 앱은 편지 사이 기간에 들어온 단어로 "오늘 새 가족이랑 고양이를 봤어!" 같은 편지를 만들어요.
 - `tests/moments_scenario.sql`로 로컬에서 확인했어요(열기 전 0개, 하루 한 번, 목록 밖 거절, 직접 쓰기 거절, 남은 못 읽음). 2026-11-18 적용.
+
+### 대화 모드 대답 순서와 무료 전환
+
+1. **기기 안 AI**: iOS 26 + Apple Intelligence가 되는 iPhone은 Apple의 기기 안 모델이 대답해요. 무료이고 아무것도 밖으로 나가지 않아요(Xcode 26 이상으로 빌드해야 들어가요).
+2. **서버 `pet-chat`**: 그 밖의 iPhone. 기본은 OpenAI. Edge Functions → Secrets에 `PET_CHAT_PROVIDER=gemini`와 `GEMINI_API_KEY`(Google AI Studio에서 발급)를 넣으면 Gemini로 바뀌어요(모델 기본값 `gemini-flash-lite-latest`, `PET_CHAT_MODEL`로 변경). Gemini 무료 등급은 테스트용이에요: 한도가 프로젝트 전체 기준이고, 보낸 내용이 Google 서비스 개선에 쓰일 수 있어요.
+3. **앱 안 대답**: 서버가 6초 안에 답하지 않거나 'AI로 대답하기'를 끈 경우.
+
+## 2026-11-18 추가 (서버 적용 대기)
+
+아래 세 마이그레이션과 함수 하나는 저장소에 있고, 로컬 PostgreSQL에서 시나리오로 확인했어요. 실제 프로젝트에 적용할 때 Supabase가 확인을 물어요(제약 조건 바꾸기가 들어 있어서).
+
+| 파일 | 하는 일 | 로컬 확인 |
+| --- | --- | --- |
+| `20261118000100_delete_account` | 설정의 계정 삭제(`delete_my_account`). 이미 도착한 유리병의 아기는 받은 사람에게 남김 | `tests/delete_account_scenario.sql` |
+| `20261118000200_friend_photos_and_blocks` | 친구 편지 사진(비공개 `letters` 버킷, 친구끼리만), 신고·차단, 차단하면 편지·요청 막힘 | `tests/friend_photos_scenario.sql` |
+| `20261118000300_friend_presence` | 주변 친구 보기: 100m 단위 위치를 친구에게만, 30분 뒤 사라짐 | `tests/presence_scenario.sql` |
+| `functions/breed-image` | 만개한 교배종(`b_` + 12자리) 부모 허용(재교배) | — |
+
+로컬에서는 `tests/local_storage_stubs.sql`(Storage 흉내)을 스텁 다음에 실행해요.

@@ -13,6 +13,8 @@ struct AccountScreen: View {
     @State private var appleNonce = ""
     @State private var nickname = ""
     @State private var note: String?
+    @State private var confirmDelete = false
+    @State private var deleting = false
     @StateObject private var social = SocialStore()
 
     var body: some View {
@@ -32,6 +34,7 @@ struct AccountScreen: View {
                 } else {
                     profileCard
                 }
+                if accountID != nil { manageCard }
                 if let loginNote { Text(loginNote).font(.footnote).foregroundStyle(Palette.moss).multilineTextAlignment(.center) }
                 if let note { Text(note).font(.footnote).foregroundStyle(.secondary) }
                 Text("계정 정보는 이 iPhone의 키체인에 보관돼요. 사진은 서버로 보내지 않아요.")
@@ -99,6 +102,40 @@ struct AccountScreen: View {
         }
         .padding(16)
         .background(.white.opacity(0.7), in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var manageCard: some View {
+        VStack(spacing: 0) {
+            NavigationLink { BlockedScreen() } label: {
+                HStack { Text("차단한 사람").foregroundStyle(Palette.ink); Spacer(); Image(systemName: "chevron.right").foregroundStyle(.tertiary) }
+                    .padding(16)
+            }
+            Divider().padding(.leading, 16)
+            Button(role: .destructive) { confirmDelete = true } label: {
+                Text(deleting ? "지우는 중…" : "계정 삭제").frame(maxWidth: .infinity, alignment: .leading).padding(16)
+            }
+            .disabled(deleting)
+            .confirmationDialog("계정을 지울까요?", isPresented: $confirmDelete, titleVisibility: .visible) {
+                Button("계정과 서버 기록 지우기", role: .destructive) { Task { await deleteAccount() } }
+                Button("취소", role: .cancel) { }
+            } message: {
+                Text("친구·편지·유리병 기록이 서버에서 바로 지워지고 되돌릴 수 없어요. 이미 다른 사람에게 도착한 아기는 그 사람에게 남아요. 이 iPhone의 사진은 그대로예요.")
+            }
+        }
+        .background(.white.opacity(0.7), in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private func deleteAccount() async {
+        deleting = true
+        defer { deleting = false }
+        do {
+            try await SupabaseClient.shared.deleteAccount()
+            await LocalNotifier.cancelAll()
+            loginNote = "계정을 지웠어요. 다시 시작하면 새 익명 계정이 만들어져요."
+        } catch {
+            loginNote = error.localizedDescription
+        }
+        await refreshAccount()
     }
 
     private var loginNames: String {

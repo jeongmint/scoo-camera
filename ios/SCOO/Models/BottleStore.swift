@@ -67,7 +67,10 @@ final class BottleStore: ObservableObject {
         busy = true
         defer { busy = false }
         let origin = baby.origin ?? district ?? "서울 어딘가"
-        bottles = try await backend.send(baby, origin: origin, wantsNews: wantsNews, fast: fast, now: now, current: bottles)
+        // A baby of bred parents travels as the species it came from, so the other family sees known names.
+        let travelling = Breed(id: baby.id, parentA: baby.shapeA ?? baby.parentA, parentB: baby.colorB ?? baby.parentB,
+                               born: baby.born, bornAtMoment: baby.bornAtMoment, origin: baby.origin, adopted: baby.adopted)
+        bottles = try await backend.send(travelling, origin: origin, wantsNews: wantsNews, fast: fast, now: now, current: bottles)
         try breeds.remove(baby.id)
         // The first bottle is the moment to ask: "tell me when it arrives / when the baby writes".
         let current = bottles

@@ -48,6 +48,7 @@ struct SettingsScreen: View {
                     Toggle("유리병·편지 알림", isOn: $localAlerts)
                         .onChange(of: localAlerts) { _, on in Task { await updateAlerts(on) } }
                     Toggle("친구와 AI로 대화하기", isOn: $talkOnline)
+                    LabeledContent("이 iPhone의 대답", value: OnDeviceReplies.isAvailable ? "기기 안 AI (무료)" : (talkOnline ? "서버 AI" : "앱 안 대답"))
                     if SupabaseConfig.isConfigured {
                         Toggle("유리병을 진짜 사람들과 주고받기", isOn: $bottleOnline)
                         Toggle("입양한 아기 편지에 사진 주제 보내기", isOn: $shareMoments)
@@ -57,6 +58,7 @@ struct SettingsScreen: View {
                 }
                 Section {
                     NavigationLink("SCOO 안내") { guide }
+                    NavigationLink("개인정보 처리방침") { PrivacyScreen() }
                     NavigationLink("테스트 도구") { testTools }
                     Button("iPhone 설정 열기") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
                 }
@@ -70,7 +72,7 @@ struct SettingsScreen: View {
     private var guide: some View {
         Form {
                 Section("대화 모드") {
-                    Text("카메라 위쪽 말풍선을 누르면 떠 있는 친구와 목소리로 이야기해요. 목소리는 iPhone에서 글자로 바뀌고, 녹음은 남기지 않아요. ‘AI로 대화하기’를 켜면 그 글자만 서버를 거쳐 OpenAI로 보내 대답을 만들고, 대화 내용은 저장하지 않아요. 끄면 앱 안의 간단한 대답만 해요.")
+                    Text("카메라 위쪽 말풍선을 누르면 떠 있는 친구와 목소리로 이야기해요. 목소리는 iPhone에서 글자로 바뀌고, 녹음은 남기지 않아요. ‘AI로 대화하기’를 켜면 Apple Intelligence가 되는 iPhone은 기기 안 AI가 대답해서 아무것도 밖으로 나가지 않아요. 그 밖의 iPhone에서는 그 글자만 서버를 거쳐 AI로 보내 대답을 만들고, 대화 내용은 저장하지 않아요. 끄면 앱 안의 간단한 대답만 해요.")
                     Text("유리병·편지 알림은 이 iPhone이 스스로 맞춰 두는 알림이라 서버를 거치지 않아요.")
                     Text("유리병을 끄면 기기 안의 가짜 바다로 돌아가요. 입양한 아기가 처음 가족에게 편지를 쓸 때, 내가 찍은 사진의 주제 단어(하늘·고양이·꽃 같은 정해진 단어)만 들어가요.")
                 }.font(.footnote)

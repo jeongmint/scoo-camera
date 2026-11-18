@@ -19,7 +19,11 @@ struct BreedScreen: View {
     private var owned: [Species] {
         Species.owned(assigned: Companion(rawValue: assignedRaw), unlockAll: unlockAll, collected: Exploration.load().collected)
     }
-    private var problem: BreedRules.Problem? { BreedRules.problem(a: parentA, b: parentB, owned: owned) }
+    /// Species plus babies in bloom (재교배).
+    private var available: [BreedParent] { BreedRules.parents(species: owned, breeds: store.breeds, moments: moments) }
+    private func parent(_ id: String?) -> BreedParent? { id.flatMap { id in available.first { $0.id == id } } }
+    private func breed(for parent: BreedParent) -> Breed? { store.breeds.first { $0.parentID == parent.id } }
+    private var problem: BreedRules.Problem? { BreedRules.problem(a: parent(parentA), b: parent(parentB), available: available) }
     private var moments: Int { garden.snapshot.moments }
 
     var body: some View {
@@ -73,26 +77,26 @@ struct BreedScreen: View {
     }
 
     private func slot(_ slot: Slot, id: String?, role: String, gives: String) -> some View {
-        let species = id.flatMap(Species.find)
+        let chosen = parent(id)
         let active = picking == slot
         return Button { picking = slot } label: {
             VStack(spacing: 6) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 22).fill(.white.opacity(0.75))
                     RoundedRectangle(cornerRadius: 22).stroke(active ? Palette.moss : Palette.sage.opacity(0.3), lineWidth: active ? 2 : 1)
-                    if let species {
-                        SpeciesPortrait(species: species).padding(12)
+                    if let chosen {
+                        portrait(chosen).padding(12)
                     } else {
                         Image(systemName: "plus").font(.title2).foregroundStyle(Palette.sage)
                     }
                 }
                 .frame(width: 118, height: 118)
                 Text(role).font(.caption.weight(.semibold))
-                Text(species?.name ?? gives).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                Text(chosen?.name ?? gives).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(role), \(species?.name ?? "비어 있음")")
+        .accessibilityLabel("\(role), \(chosen?.name ?? "비어 있음")")
         .accessibilityHint("눌러서 \(role)를 고를 차례로 바꿔요")
     }
 
@@ -100,7 +104,7 @@ struct BreedScreen: View {
 
     @ViewBuilder
     private var picker: some View {
-        if owned.count < 2 {
+        if available.count < 2 {
             Text("교배하려면 친구가 두 명 이상 있어야 해요. 지금은 \(owned.map(\.name).joined(separator: ", ")). 설정 > 동네 친구(테스트)에서 ‘모든 친구 열기’를 켜면 전부 시험해 볼 수 있어요.")
                 .font(.footnote).foregroundStyle(.secondary)
                 .padding(16).background(.white.opacity(0.6), in: RoundedRectangle(cornerRadius: 14))
@@ -108,33 +112,52 @@ struct BreedScreen: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text(picking == .a ? "부모 A를 골라요" : "부모 B를 골라요").font(.subheadline.weight(.medium))
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
-                    ForEach(owned) { species in
-                        let chosen = species.id == parentA || species.id == parentB
-                        Button { choose(species) } label: {
+                    ForEach(available) { candidate in
+                        let chosen = candidate.id == parentA || candidate.id == parentB
+                        Button { choose(candidate) } label: {
                             VStack(spacing: 3) {
-                                SpeciesPortrait(species: species).frame(height: 54)
-                                Text(species.name).font(.system(size: 10)).lineLimit(1).minimumScaleFactor(0.7)
+                                portrait(candidate).frame(height: 54)
+                                Text(candidate.name).font(.system(size: 10)).lineLimit(1).minimumScaleFactor(0.7)
                             }
                             .padding(6)
                             .frame(maxWidth: .infinity)
                             .background(chosen ? Palette.sage.opacity(0.22) : .white.opacity(0.55), in: RoundedRectangle(cornerRadius: 12))
+                            .overlay(alignment: .topTrailing) {
+                                if candidate.isBreed {
+                                    Text("\(candidate.generation)세대").font(.system(size: 8, weight: .semibold))
+                                        .padding(.horizontal, 5).padding(.vertical, 2)
+                                        .background(Palette.moss, in: Capsule()).foregroundStyle(.white).padding(4)
+                                }
+                            }
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel(species.name + (species.isEvent ? ", 이벤트" : ""))
+                        .accessibilityLabel(candidate.name + (candidate.isBreed ? ", 만개한 아기 \(candidate.generation)세대" : (candidate.species?.isEvent == true ? ", 이벤트" : "")))
                     }
+                }
+                if store.breeds.contains(where: { $0.stage(moments: moments) != .bloom }) {
+                    Text("아기가 만개하면 부모로 고를 수 있어요.").font(.caption2).foregroundStyle(.secondary)
                 }
             }
         }
     }
 
-    private func choose(_ species: Species) {
+    private func choose(_ candidate: BreedParent) {
         UISelectionFeedbackGenerator().selectionChanged()
         switch picking {
         case .a:
-            parentA = species.id
-            if parentB == nil || parentB == species.id { picking = .b }
+            parentA = candidate.id
+            if parentB == nil || parentB == candidate.id { picking = .b }
         case .b:
-            parentB = species.id
+            parentB = candidate.id
+        }
+    }
+
+    @ViewBuilder
+    private func portrait(_ candidate: BreedParent) -> some View {
+        if candidate.isBreed, let baby = breed(for: candidate) {
+            BreedPortrait(breed: baby, stage: .bloom)
+        } else if let species = candidate.species {
+            SpeciesPortrait(species: species)
         }
     }
 
@@ -156,9 +179,9 @@ struct BreedScreen: View {
     }
 
     private func hatch() {
-        guard let a = parentA, let b = parentB, problem == nil else { return }
+        guard let a = parent(parentA), let b = parent(parentB), problem == nil else { return }
         do {
-            let baby = try store.hatch(a: a, b: b, moments: moments)
+            let baby = try store.hatch(a, b, moments: moments)
             parentA = nil
             parentB = nil
             picking = .a
@@ -177,12 +200,13 @@ struct BreedScreen: View {
                 Text("우리 아기들").font(.subheadline.weight(.medium))
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
                     ForEach(store.breeds) { baby in
-                        let adult = baby.isAdult(moments: moments)
+                        let stage = baby.stage(moments: moments)
+                        let next = GrowthStage.photosToNext(after: baby.photosSinceBirth(moments: moments))
                         Button { showing = baby } label: {
                             VStack(spacing: 4) {
-                                BreedPortrait(breed: baby, adult: adult).frame(height: 84)
+                                BreedPortrait(breed: baby, stage: stage).frame(height: 84)
                                 Text(baby.title).font(.system(size: 10, weight: .medium)).lineLimit(1).minimumScaleFactor(0.7)
-                                Text((baby.origin.map { "\($0) 출신 · " } ?? "") + (adult ? "성체" : "아기 · 사진 \(baby.photosLeft(moments: moments))장 더"))
+                                Text((baby.origin.map { "\($0) 출신 · " } ?? "") + (stage == .bloom ? "만개" : "\(stage.title) · 사진 \(next)장 더"))
                                     .font(.system(size: 9)).foregroundStyle(.secondary)
                             }
                             .padding(8)
@@ -217,7 +241,7 @@ private struct HatchView: View {
                     Text("태어났어요!").font(.title2.weight(.semibold))
                     Text(breed.title).font(.subheadline).foregroundStyle(.secondary)
                     if let drawNote { Text(drawNote).font(.caption2).foregroundStyle(.secondary) }
-                    Text("사진을 \(BreedRules.photosToGrow)장 더 찍으면 데이지를 단 성체로 자라요.")
+                    Text("사진을 \(BreedRules.photosToGrowing)장 더 찍으면 성장, \(BreedRules.photosToGrow)장이면 데이지를 단 만개. 만개하면 다시 교배할 수 있어요.")
                         .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
                     Button("반가워!") { done() }
                         .font(.headline).padding(.horizontal, 36).padding(.vertical, 12)
@@ -308,24 +332,37 @@ private struct BreedDetail: View {
 
     var body: some View {
         let adult = breed.isAdult(moments: moments)
+        let stage = breed.stage(moments: moments)
+        let photos = breed.photosSinceBirth(moments: moments)
         let drawn = BreedArt.hasArt(breed)
         NavigationStack {
             ScrollView {
                 VStack(spacing: 18) {
-                    BreedPortrait(breed: breed, adult: adult).frame(width: 240, height: 240)
+                    BreedPortrait(breed: breed, stage: stage).frame(width: 240, height: 240)
                     Text(breed.title).font(.title3.weight(.semibold))
+                    if let generation = breed.generation, generation > 1 {
+                        Text("\(generation)세대 · 교배종끼리 만나 태어났어요").font(.caption).foregroundStyle(.secondary)
+                    }
+                    HStack(spacing: 6) {
+                        ForEach([GrowthStage.baby, .growing, .bloom], id: \.rawValue) { step in
+                            Text(step.title).font(.caption.weight(step == stage ? .bold : .regular))
+                                .padding(.horizontal, 10).padding(.vertical, 5)
+                                .background(step <= stage ? Palette.sage.opacity(0.35) : .white.opacity(0.6), in: Capsule())
+                        }
+                    }
                     if adult {
-                        Text("다 자란 성체예요").font(.subheadline).foregroundStyle(.secondary)
+                        Text("활짝 핀 만개예요. 이제 부모가 되어 다시 교배할 수 있어요.").font(.subheadline).foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
                     } else {
                         VStack(spacing: 6) {
-                            Text("아기 · 사진 \(breed.photosLeft(moments: moments))장 더 찍으면 성체").font(.subheadline)
-                            ProgressView(value: Double(breed.photosSinceBirth(moments: moments)), total: Double(BreedRules.photosToGrow))
+                            Text("사진 \(GrowthStage.photosToNext(after: photos))장 더 찍으면 \(stage == .baby ? "성장" : "만개")").font(.subheadline)
+                            ProgressView(value: Double(photos), total: Double(BreedRules.photosToGrow))
                                 .tint(Palette.sage).frame(maxWidth: 220)
                         }
                     }
                     HStack(spacing: 22) {
-                        parent(breed.mother, role: "부모 A · 몸과 표정")
-                        parent(breed.father, role: "부모 B · 색과 특징")
+                        parent(breed.mother, name: breed.nameA, role: "부모 A · 몸과 표정")
+                        parent(breed.father, name: breed.nameB, role: "부모 B · 색과 특징")
                     }
                     Text((breed.adopted == true ? "우리 집에 온 날 " : "태어난 날 ") + breed.born.formatted(date: .long, time: .omitted))
                         .font(.caption).foregroundStyle(.secondary)
@@ -352,10 +389,11 @@ private struct BreedDetail: View {
         .tint(Palette.moss)
     }
 
-    private func parent(_ species: Species?, role: String) -> some View {
+    /// `name` is set when the parent was itself a bred baby; the picture then shows the species it came from.
+    private func parent(_ species: Species?, name: String?, role: String) -> some View {
         VStack(spacing: 4) {
             if let species { SpeciesPortrait(species: species).frame(width: 64, height: 64) }
-            Text(species?.name ?? "?").font(.caption.weight(.medium))
+            Text(name ?? species?.name ?? "?").font(.caption.weight(.medium)).lineLimit(1).minimumScaleFactor(0.7)
             Text(role).font(.system(size: 9)).foregroundStyle(.secondary)
         }
     }

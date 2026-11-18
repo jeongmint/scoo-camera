@@ -127,3 +127,46 @@ private struct ThinkingDots: View {
         .accessibilityLabel("생각하는 중")
     }
 }
+
+/// Friends nearby on the camera: each friend floats toward where they are, on a ring inside the frame,
+/// with how far away they are. Friends behind the phone sit at the bottom edge.
+struct RadarOverlay: View {
+    let blips: [FriendRadar.Blip]
+    let heading: Double
+    let size: CGSize
+    let insets: EdgeInsets
+
+    var body: some View {
+        let center = CGPoint(x: size.width / 2, y: (insets.top + 120 + size.height - insets.bottom - 150) / 2)
+        let rx = size.width / 2 - 58
+        let ry = (size.height - insets.top - insets.bottom - 300) / 2
+        ZStack {
+            ForEach(blips.prefix(6)) { blip in
+                let turn = (blip.bearing - heading) * .pi / 180
+                let point = CGPoint(x: center.x + CGFloat(sin(turn)) * rx, y: center.y - CGFloat(cos(turn)) * ry)
+                chip(blip, turn: turn).position(point)
+            }
+        }
+        .animation(.easeOut(duration: 0.4), value: heading)
+        .allowsHitTesting(false)
+    }
+
+    private func chip(_ blip: FriendRadar.Blip, turn: Double) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: "location.north.fill").font(.system(size: 9))
+                .rotationEffect(.radians(turn))
+            if let species = blip.hero.flatMap(Species.find) {
+                SpeciesPortrait(species: species).frame(width: 22, height: 22)
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                Text(blip.name).font(.system(size: 10, weight: .semibold)).lineLimit(1)
+                Text(FriendRadar.label(blip.meters)).font(.system(size: 9, design: .monospaced))
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 9).padding(.vertical, 6)
+        .background(.black.opacity(0.5), in: Capsule())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(blip.name), \(FriendRadar.label(blip.meters))")
+    }
+}
