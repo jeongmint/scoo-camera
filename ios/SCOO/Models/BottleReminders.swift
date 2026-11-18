@@ -30,7 +30,9 @@ enum BottleReminders {
                     guard date > now else { continue }
                     reminders.append(Reminder(id: "\(prefix)letter-\(bottle.id)-\(index)", date: date,
                                               title: "\(bottle.title)에게서 편지가 왔어요",
-                                              body: BottleRules.letterText(bottle, index: index)))
+                                              // The words arrive with the new family's photos, so the
+                                              // letter itself is read in the app.
+                                              body: "새 가족이랑 지낸 이야기가 담겨 있어요. 열어 볼까요?"))
                 }
             default:
                 break

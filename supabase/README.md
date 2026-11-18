@@ -109,3 +109,10 @@ python3 scripts/generate_xcodeproj.py --paid-team
 - `pet-chat`은 OpenAI(`gpt-5.4-mini`, 추론 없음, 2026-11-17 기준 약 1초)로 한두 문장 반말 대답과 표정(`smile|surprised|awe|yum|normal`)을 JSON으로 돌려줘요. 위험한 말에는 109·112·119 안내를 하도록 프롬프트에 넣었어요.
 - 로그인한 계정만, 하루 300번(`PET_CHAT_DAILY_LIMIT`). 대화 내용은 저장하지 않고 `pet_talk_usage`에 하루 횟수만 세요. 모델은 `PET_CHAT_MODEL`, 추론 정도는 `PET_CHAT_REASONING` 비밀값으로 바꿀 수 있어요.
 - 서버가 6초 안에 답하지 않거나 설정에서 'AI로 대답하기'를 끄면 앱 안의 간단한 대답(`LocalReplies`)으로 받아쳐요.
+
+## 입양 편지 단어 (`20261118000000_bottle_moments`)
+
+- 모르는 사람끼리 사진이 오가지 않도록, 입양한 쪽 폰은 사진을 **정해진 주제 단어**(sky·cat·flower·dog·green·sweet·sign·water·coffee·book·food)로만 바꿔 `share_moment(p_subjects)`로 보내요. 오늘의 미션과 같은 Vision 라벨을 써요.
+- 서버는 그 계정이 **열어 본** 유리병 중 처음 가족이 '가끔 소식 전해줘'를 켠 것에만, 주제마다 하루 한 번 `bottle_moments`에 남겨요. 목록 밖 단어나 직접 쓰기는 거절해요.
+- 읽기는 처음 가족(보낸 사람)만 돼요(RLS). 앱은 편지 사이 기간에 들어온 단어로 "오늘 새 가족이랑 고양이를 봤어!" 같은 편지를 만들어요.
+- `tests/moments_scenario.sql`로 로컬에서 확인했어요(열기 전 0개, 하루 한 번, 목록 밖 거절, 직접 쓰기 거절, 남은 못 읽음). 2026-11-18 적용.

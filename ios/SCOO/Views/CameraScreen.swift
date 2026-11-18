@@ -570,6 +570,9 @@ struct CameraScreen: View {
             let missionHit = missionDoneDay != DailyMission.dayKey(Date()) && mission.matches(result.labels)
             let gain = try await garden.add(result, filter: look, mode: mode, location: place, extra: missionHit ? DailyMission.bonus : 0)
             if missionHit { missionDoneDay = DailyMission.dayKey(Date()) }
+            // Babies this user adopted write home about what they saw: only the subject word leaves the phone.
+            let subjects = LetterWords.subjects(labels: result.labels, isFood: result.isFood)
+            if !subjects.isEmpty { Task { await LetterWords.share(subjects) } }
             react(MoriExpression.reaction(isFood: result.isFood, bonus: result.bonus, leveledUp: garden.growth.level > oldLevel,
                                           previous: lastReaction, roll: .random(in: 0..<1)))
             withAnimation(.easeOut(duration: 0.12)) { shutterFlash = true }

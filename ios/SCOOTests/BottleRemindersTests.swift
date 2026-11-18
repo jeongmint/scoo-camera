@@ -29,7 +29,7 @@ final class BottleRemindersTests: XCTestCase {
         let plan = BottleReminders.plan([sent], now: now, fast: false)
         XCTAssertEqual(plan.count, BottleRules.maxLetters)
         XCTAssertEqual(plan.map(\.date), (0..<BottleRules.maxLetters).map { BottleRules.letterDate(sent, index: $0, fast: false) })
-        XCTAssertEqual(plan[0].body, BottleRules.letterText(sent, index: 0))
+        XCTAssertTrue(plan[0].title.contains(sent.title))
         XCTAssertEqual(Set(plan.map(\.id)).count, plan.count, "ids must be unique so rescheduling replaces")
     }
 
