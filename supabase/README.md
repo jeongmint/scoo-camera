@@ -136,4 +136,4 @@ python3 scripts/generate_xcodeproj.py --paid-team
 | `functions/breed-image` | 만개한 교배종(`b_` + 12자리) 부모 허용(재교배) | — |
 
 로컬에서는 `tests/local_storage_stubs.sql`(Storage 흉내)을 스텁 다음에 실행해요.
-| `20261118000500_nickname_names` | 랜덤 이름에 쓰는 캐릭터 이름을 지금 목록(야구공 → 츄츄, 새 친구들)으로 | — |
+| `20261118000500_nickname_names` | 랜덤 이름에 쓰는 캐릭터 이름을 지금 목록(야구공 → 도도, 새 친구들)으로 | — |
