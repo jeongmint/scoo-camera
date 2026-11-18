@@ -17,6 +17,31 @@ struct Species: Identifiable, Hashable {
     let assetName: String
     var isEvent = false
     var daisy = DaisySpot()
+    /// Seasonal event friends (해피 겨울, 보미 봄, 소르 여름, 도토 가을).
+    var season: Season? = nil
+}
+
+/// The four seasons by month (봄 3–5, 여름 6–8, 가을 9–11, 겨울 12–2).
+enum Season: String, CaseIterable {
+    case spring, summer, autumn, winter
+
+    var title: String {
+        switch self {
+        case .spring: return "봄"
+        case .summer: return "여름"
+        case .autumn: return "가을"
+        case .winter: return "겨울"
+        }
+    }
+
+    static func of(_ date: Date, calendar: Calendar = .current) -> Season {
+        switch calendar.component(.month, from: date) {
+        case 3...5: return .spring
+        case 6...8: return .summer
+        case 9...11: return .autumn
+        default: return .winter
+        }
+    }
 }
 
 extension Species {
@@ -25,7 +50,7 @@ extension Species {
         Species(id: "kuru", name: "쿠르", assetName: "Companion-kuru"),
         Species(id: "mori", name: "모리", assetName: "Companion-mori"),
         Species(id: "nyamo", name: "냐모", assetName: "Companion-nyamo", daisy: DaisySpot(x: 0.26, belowEars: true, drop: 0.25)),
-        Species(id: "happy", name: "해피", assetName: "Companion-happy", isEvent: true),
+        Species(id: "happy", name: "해피", assetName: "Companion-happy", isEvent: true, season: .winter),
         Species(id: "huu", name: "후우", assetName: "Species-huu"),
         Species(id: "chiko", name: "치코", assetName: "Species-chiko", daisy: DaisySpot(x: 0.26, belowEars: true, drop: 0.25)),
         Species(id: "dochi", name: "도치", assetName: "Species-dochi"),
@@ -46,6 +71,14 @@ extension Species {
         Species(id: "hechi", name: "헤치", assetName: "Species-hechi"),
         Species(id: "sia", name: "시아", assetName: "Species-sia"),
         Species(id: "dia", name: "디아", assetName: "Species-dia"),
+        Species(id: "komi", name: "코미", assetName: "Species-komi"),
+        Species(id: "mello", name: "멜로", assetName: "Species-mello"),
+        Species(id: "bandi", name: "반디", assetName: "Species-bandi"),
+        Species(id: "lumi", name: "루미", assetName: "Species-lumi"),
+        Species(id: "bomi", name: "보미", assetName: "Species-bomi", isEvent: true, season: .spring),
+        Species(id: "soru", name: "소르", assetName: "Species-soru", isEvent: true, season: .summer),
+        Species(id: "doto", name: "도토", assetName: "Species-doto", isEvent: true,
+                daisy: DaisySpot(x: 0.26, belowEars: true, drop: 0.25), season: .autumn),
     ]
 
     static func find(_ id: String) -> Species? { all.first { $0.id == id } }

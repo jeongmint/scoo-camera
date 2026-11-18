@@ -58,6 +58,13 @@ struct TalkPet: Equatable {
         "tori": Look(kind: "분홍 귀 하얀 토끼", tint: (0.95, 0.74, 0.80), pitch: 1.5),
         "toto": Look(kind: "고리를 두른 행성", tint: (0.76, 0.63, 0.90), pitch: 1.2),
         "yarn": Look(kind: "분홍 실타래", tint: (0.92, 0.56, 0.62), pitch: 1.35),
+        "komi": Look(kind: "길을 알려 주는 금빛 나침반", tint: (0.86, 0.66, 0.36), pitch: 1.3),
+        "mello": Look(kind: "노래하는 보랏빛 오르골", tint: (0.78, 0.62, 0.84), pitch: 1.45),
+        "bandi": Look(kind: "반딧불이가 사는 작은 등불", tint: (0.86, 0.84, 0.46), pitch: 1.35),
+        "lumi": Look(kind: "반짝반짝 미러볼", tint: (0.84, 0.74, 0.92), pitch: 1.4),
+        "bomi": Look(kind: "벚꽃을 꽂은 봄 개구리", tint: (0.62, 0.74, 0.46), pitch: 1.4),
+        "soru": Look(kind: "하늘색 여름 아이스크림", tint: (0.62, 0.82, 0.96), pitch: 1.5),
+        "doto": Look(kind: "도토리를 안은 가을 다람쥐", tint: (0.88, 0.52, 0.26), pitch: 1.45),
     ]
 }
 

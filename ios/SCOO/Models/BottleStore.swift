@@ -107,8 +107,9 @@ final class BottleStore: ObservableObject {
         }
     }
 
-    /// Bottles I sent that nobody came for by the next day: the sea brings a new character for each,
-    /// one of the 5 of `home` the user does not have yet if possible. Returns what came.
+    /// Bottles I sent that nobody came for by the next day: the sea brings a new character for each, one of the
+    /// 5 of the place the bottle was sent from (else `home`), one the user does not have yet if possible.
+    /// So sending a bottle while travelling brings that place's friends. Returns what came.
     @discardableResult
     func settleWaiting(home: Region?, friends: FriendStore, fast: Bool, now: Date = Date()) async -> [Species] {
         var came: [Species] = []
@@ -118,8 +119,9 @@ final class BottleStore: ObservableObject {
             bottles = result.1
             guard result.0 else { continue }
             var generator = SystemRandomNumberGenerator()
-            let species = friends.seaFriend(near: home, using: &generator)
-            friends.add(species, how: .sea, origin: home?.title, now: now)
+            let place = Regions.resolve(bottle.origin) ?? home
+            let species = friends.seaFriend(near: place, using: &generator)
+            friends.add(species, how: .sea, origin: place?.title, now: now)
             came.append(species)
         }
         return came
@@ -132,7 +134,8 @@ final class BottleStore: ObservableObject {
         guard canSend(now: now, fast: fast) else { throw SCOOError.message("유리병은 하루에 \(BottleRules.dailySends)번 띄울 수 있어요.") }
         busy = true
         defer { busy = false }
-        let origin = baby.origin ?? district ?? "서울 어딘가"
+        // the bottle leaves from where the user is (that place's friends answer if nobody swaps)
+        let origin = district.flatMap { Regions.resolve($0)?.title } ?? baby.origin ?? "어딘가"
         // A baby of bred parents travels as the species it came from, so the other family sees known names.
         let travelling = Breed(id: baby.id, parentA: baby.shapeA ?? baby.parentA, parentB: baby.colorB ?? baby.parentB,
                                born: baby.born, bornAtMoment: baby.bornAtMoment, origin: baby.origin, adopted: baby.adopted)
