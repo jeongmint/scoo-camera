@@ -8,21 +8,38 @@ import CoreImage
 struct BreedPortrait: View {
     let breed: Breed
     var adult = false
+    /// 성장 3단계: smaller while young, a sprout while growing, the daisy in bloom. Nil = `adult` alone decides.
+    var stage: GrowthStage? = nil
+
+    private var bloom: Bool { adult || stage == .bloom }
 
     var body: some View {
-        if adult, let drawn = UIImage(named: breed.adultAsset) {
+        portrait
+            .scaleEffect(stage?.scale ?? 1)
+            .overlay(alignment: .top) {
+                if stage == .growing {
+                    Image(systemName: "leaf.fill").font(.system(size: 12)).foregroundStyle(Palette.sage)
+                        .rotationEffect(.degrees(-20)).offset(y: 2).accessibilityHidden(true)
+                }
+            }
+            .accessibilityLabel(stage.map { "\(breed.title), \($0.title)" } ?? breed.title)
+    }
+
+    @ViewBuilder
+    private var portrait: some View {
+        if bloom, let drawn = UIImage(named: breed.adultAsset) {
             Image(uiImage: drawn).resizable().scaledToFit()
         } else if let baby = UIImage(named: breed.babyAsset) {
-            DaisyFrame(image: baby, key: breed.babyAsset, spot: breed.mother?.daisy ?? DaisySpot(), adult: adult) {
+            DaisyFrame(image: baby, key: breed.babyAsset, spot: breed.mother?.daisy ?? DaisySpot(), adult: bloom) {
                 Image(uiImage: baby).resizable().scaledToFit()
             }
         } else if let drawn = BreedArt.image(breed.key) {
             // drawn by the server when the egg hatched
-            DaisyFrame(image: drawn, key: "art-\(breed.key)", spot: breed.mother?.daisy ?? DaisySpot(), adult: adult) {
+            DaisyFrame(image: drawn, key: "art-\(breed.key)", spot: breed.mother?.daisy ?? DaisySpot(), adult: bloom) {
                 Image(uiImage: drawn).resizable().scaledToFit()
             }
         } else if let mother = breed.mother, let shape = UIImage(named: mother.assetName) {
-            DaisyFrame(image: shape, key: mother.assetName, spot: mother.daisy, adult: adult) {
+            DaisyFrame(image: shape, key: mother.assetName, spot: mother.daisy, adult: bloom) {
                 StandInBaby(shape: shape, color: breed.father.flatMap { BodyColor.of($0.assetName) } ?? .white)
             }
             .overlay(alignment: .bottomTrailing) {

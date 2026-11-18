@@ -21,8 +21,10 @@ enum BreedArt {
     /// Asks the server for the pair's picture (drawing it if nobody has yet) and saves it on this device.
     static func fetch(_ breed: Breed, client: SupabaseClient = .shared) async throws {
         guard !hasArt(breed) else { return }
+        // A bred parent (재교배) is drawn from its own picture when this device has one, else from its species.
         guard let mother = breed.mother, let father = breed.father,
-              let imageA = parentPNG(mother.assetName), let imageB = parentPNG(father.assetName) else {
+              let imageA = breed.artA.flatMap(artPNG) ?? parentPNG(mother.assetName),
+              let imageB = breed.artB.flatMap(artPNG) ?? parentPNG(father.assetName) else {
             throw SCOOError.message("부모 그림을 찾지 못했어요.")
         }
         let data = try await client.invoke("breed-image", [
@@ -39,9 +41,19 @@ enum BreedArt {
         try png.write(to: fileURL(breed.key), options: .atomic)
     }
 
+    /// A bred parent's picture: drawn into the app, or downloaded from the server earlier.
+    private static func artPNG(_ key: String) -> Data? {
+        guard let picture = UIImage(named: "Breed-\(key)") ?? Self.image(key) else { return nil }
+        return shrink(picture)
+    }
+
     /// A parent's picture, shrunk to at most 512 px so the request stays small.
     private static func parentPNG(_ assetName: String) -> Data? {
         guard let image = UIImage(named: assetName) else { return nil }
+        return shrink(image)
+    }
+
+    private static func shrink(_ image: UIImage) -> Data? {
         let side = min(512, max(image.size.width * image.scale, image.size.height * image.scale))
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1

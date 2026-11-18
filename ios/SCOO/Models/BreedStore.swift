@@ -25,6 +25,23 @@ final class BreedStore: ObservableObject {
         return baby
     }
 
+    /// A baby of two parents that may themselves be bred babies (재교배).
+    @discardableResult
+    func hatch(_ a: BreedParent, _ b: BreedParent, moments: Int, now: Date = Date()) throws -> Breed {
+        var baby = Breed(id: UUID(), parentA: a.id, parentB: b.id, born: now, bornAtMoment: moments)
+        if a.isBreed || b.isBreed {
+            baby.shapeA = a.shape
+            baby.colorB = b.color
+            baby.nameA = a.isBreed ? a.name : nil
+            baby.nameB = b.isBreed ? b.name : nil
+            baby.artA = a.art
+            baby.artB = b.art
+            baby.generation = max(a.generation, b.generation) + 1
+        }
+        try write([baby] + breeds)
+        return baby
+    }
+
     /// A baby leaves in a glass bottle.
     func remove(_ id: UUID) throws {
         try write(breeds.filter { $0.id != id })

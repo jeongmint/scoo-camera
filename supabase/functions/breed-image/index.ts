@@ -70,7 +70,8 @@ Deno.serve(async (req) => {
   let body: { parentA?: string; parentB?: string; imageA?: string; imageB?: string };
   try { body = await req.json(); } catch { return json({ error: "bad json" }, 400); }
   const { parentA, parentB, imageA, imageB } = body;
-  const id = /^[a-z_]{1,30}$/;
+  // species ids ("mori") and bred babies in bloom ("b_" + 12 hex, 재교배)
+  const id = /^[a-z0-9_]{1,30}$/;
   if (!parentA || !parentB || !id.test(parentA) || !id.test(parentB) || parentA === parentB) {
     return json({ error: "two different parent ids" }, 400);
   }
