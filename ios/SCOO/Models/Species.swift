@@ -62,7 +62,7 @@ extension Species {
         Species(id: "riru", name: "리루", assetName: "Species-riru"),
         Species(id: "popo", name: "포포", assetName: "Species-popo"),
         Species(id: "tangerine", name: "귤", assetName: "Species-tangerine"),
-        Species(id: "baseball", name: "야구공", assetName: "Species-baseball"),
+        Species(id: "baseball", name: "츄츄", assetName: "Species-baseball"),
         Species(id: "otter", name: "튜브를 한 수달", assetName: "Species-otter"),
         Species(id: "yarn", name: "실타래", assetName: "Species-yarn"),
         Species(id: "tori", name: "토리", assetName: "Species-tori", daisy: DaisySpot(x: 0.33, belowEars: true)),
