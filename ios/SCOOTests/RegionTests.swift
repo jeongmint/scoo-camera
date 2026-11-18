@@ -19,7 +19,7 @@ final class RegionTests: XCTestCase {
         let counts = Dictionary(grouping: Regions.all, by: \.friendID).mapValues(\.count)
         XCTAssertGreaterThanOrEqual(counts.values.min() ?? 0, 1)
         // the Seoul-only friends live in exactly one 구 each
-        for id in ["bosong", "cabi", "chiru", "sena", "inky", "momo", "mumu", "pico", "posil", "rora"] {
+        for id in ["bosong", "cabi", "chiru", "cro", "inky", "momo", "mumu", "pico", "posil", "rora"] {
             XCTAssertEqual(Regions.homes(of: id).map(\.province), [.seoul], id)
         }
         XCTAssertLessThanOrEqual(counts.values.max() ?? 0, 20)
