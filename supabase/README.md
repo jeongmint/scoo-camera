@@ -116,3 +116,9 @@ python3 scripts/generate_xcodeproj.py --paid-team
 - 서버는 그 계정이 **열어 본** 유리병 중 처음 가족이 '가끔 소식 전해줘'를 켠 것에만, 주제마다 하루 한 번 `bottle_moments`에 남겨요. 목록 밖 단어나 직접 쓰기는 거절해요.
 - 읽기는 처음 가족(보낸 사람)만 돼요(RLS). 앱은 편지 사이 기간에 들어온 단어로 "오늘 새 가족이랑 고양이를 봤어!" 같은 편지를 만들어요.
 - `tests/moments_scenario.sql`로 로컬에서 확인했어요(열기 전 0개, 하루 한 번, 목록 밖 거절, 직접 쓰기 거절, 남은 못 읽음). 2026-11-18 적용.
+
+### 대화 모드 대답 순서와 무료 전환
+
+1. **기기 안 AI**: iOS 26 + Apple Intelligence가 되는 iPhone은 Apple의 기기 안 모델이 대답해요. 무료이고 아무것도 밖으로 나가지 않아요(Xcode 26 이상으로 빌드해야 들어가요).
+2. **서버 `pet-chat`**: 그 밖의 iPhone. 기본은 OpenAI. Edge Functions → Secrets에 `PET_CHAT_PROVIDER=gemini`와 `GEMINI_API_KEY`(Google AI Studio에서 발급)를 넣으면 Gemini로 바뀌어요(모델 기본값 `gemini-flash-lite-latest`, `PET_CHAT_MODEL`로 변경). Gemini 무료 등급은 테스트용이에요: 한도가 프로젝트 전체 기준이고, 보낸 내용이 Google 서비스 개선에 쓰일 수 있어요.
+3. **앱 안 대답**: 서버가 6초 안에 답하지 않거나 'AI로 대답하기'를 끈 경우.
