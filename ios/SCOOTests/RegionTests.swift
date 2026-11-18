@@ -9,7 +9,7 @@ final class RegionTests: XCTestCase {
         XCTAssertTrue(Regions.all.allSatisfy { $0.friend != nil }, "every friend id is a real species")
         XCTAssertTrue(Regions.all.allSatisfy { $0.friend?.isEvent == false }, "the snowman is an event friend, not a local one")
         let living = Set(Regions.all.map(\.friendID))
-        XCTAssertEqual(living, Set(Species.all.filter { !$0.isEvent }.map(\.id)), "all 28 regular friends live somewhere")
+        XCTAssertEqual(living, Set(Species.all.filter { !$0.isEvent }.map(\.id)), "all 38 regular friends live somewhere")
         XCTAssertTrue(Regions.all.allSatisfy { $0.candidates.count == 5 && Set($0.candidates).count == 5 }, "다섯 친구, 겹치지 않게")
         XCTAssertTrue(Regions.all.allSatisfy { $0.candidates.first == $0.friendID }, "그 동네 친구가 첫째")
         XCTAssertTrue(Regions.all.allSatisfy { $0.candidateSpecies.count == 5 && !$0.candidateSpecies.contains { $0.isEvent } })
@@ -17,7 +17,11 @@ final class RegionTests: XCTestCase {
 
     func testRarityHasCommonAndRareFriends() {
         let counts = Dictionary(grouping: Regions.all, by: \.friendID).mapValues(\.count)
-        XCTAssertGreaterThanOrEqual(counts.values.min() ?? 0, 4)
+        XCTAssertGreaterThanOrEqual(counts.values.min() ?? 0, 1)
+        // the Seoul-only friends live in exactly one 구 each
+        for id in ["bosong", "cabi", "chiru", "cro", "inky", "momo", "mumu", "pico", "posil", "rora"] {
+            XCTAssertEqual(Regions.homes(of: id).map(\.province), [.seoul], id)
+        }
         XCTAssertLessThanOrEqual(counts.values.max() ?? 0, 20)
         XCTAssertEqual(Regions.homes(of: "tangerine").map(\.title).contains("제주 서귀포시"), true)
     }
@@ -50,6 +54,6 @@ final class RegionTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(mapo.intersection(seodaemun).count, 2)
         XCTAssertTrue(Regions.find("제주 서귀포시")!.candidates.contains("tangerine"))
         let counts = Dictionary(grouping: Regions.all.flatMap(\.candidates), by: { $0 }).mapValues(\.count)
-        XCTAssertEqual(counts.count, 28, "every regular character can be someone's first friend somewhere")
+        XCTAssertEqual(counts.count, 38, "every regular character can be someone's first friend somewhere")
     }
 }

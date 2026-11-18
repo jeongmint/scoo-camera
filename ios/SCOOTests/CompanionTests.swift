@@ -31,7 +31,7 @@ final class CompanionTests: XCTestCase {
         XCTAssertFalse(draws.contains("happy"))
         let anywhere = (0..<400).map { _ in Regions.randomStarter(using: &generator) }
         XCTAssertFalse(anywhere.contains { $0.isEvent })
-        XCTAssertEqual(Species.regulars.count, 28)
+        XCTAssertEqual(Species.regulars.count, 38)
     }
 
     func testOneSeasonalFriendPerSeason() {
