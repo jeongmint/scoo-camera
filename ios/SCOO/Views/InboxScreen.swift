@@ -172,7 +172,7 @@ struct InboxScreen: View {
 
     @ViewBuilder
     private func newsTab(_ now: Date) -> some View {
-        let letters = BottleRules.letters(for: bottles.bottles, now: now, fast: fast)
+        let letters = BottleRules.letters(for: bottles.bottles, now: now, fast: fast, moments: bottles.moments)
         if letters.isEmpty {
             Text("유리병으로 보낸 아이가 ‘가끔 소식 전해줘’를 켜고 떠나면 여기로 편지가 와요.").font(.footnote).foregroundStyle(.secondary)
         }

@@ -183,7 +183,7 @@ struct BottleScreen: View {
 
     @ViewBuilder
     private func letters(_ now: Date) -> some View {
-        let all = BottleRules.letters(for: bottles.bottles, now: now, fast: fast)
+        let all = BottleRules.letters(for: bottles.bottles, now: now, fast: fast, moments: bottles.moments)
         let sent = bottles.bottles.filter { $0.direction == .outgoing && $0.hasArrived(at: now) }
         if !all.isEmpty || !sent.isEmpty {
             section("입양 간 아이들의 소식") {

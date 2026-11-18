@@ -14,6 +14,7 @@ struct SettingsScreen: View {
     @AppStorage("bottleOnline") private var bottleOnline = true
     @AppStorage("talkOnline") private var talkOnline = true
     @AppStorage("localAlerts") private var localAlerts = true
+    @AppStorage("shareMoments") private var shareMoments = true
     @State private var accountID: String?
     @State private var connecting = false
     @State private var nickname = ""
@@ -87,6 +88,7 @@ struct SettingsScreen: View {
                             Button(connecting ? "연결 중…" : "서버에 연결하기") { Task { await connect() } }.disabled(connecting)
                         }
                         Toggle("유리병을 진짜 사람들과 주고받기", isOn: $bottleOnline)
+                        Toggle("입양한 아기 편지에 사진 주제 보내기", isOn: $shareMoments)
                         if accountID != nil {
                             HStack {
                                 TextField(social.profile?.nickname ?? "친구에게 보일 이름", text: $nickname)
@@ -106,7 +108,7 @@ struct SettingsScreen: View {
                         Text("서버 키가 아직 없어서 유리병은 이 기기 안에서만 시험해요.").font(.footnote)
                     }
                 } header: { Text("계정 · 서버") } footer: {
-                    Text("로그인 없이 익명 계정으로 시작해요. \(loginNames)로 이어 두면 계정이 지켜져요. 계정 정보는 이 iPhone의 키체인에 보관돼요. 끄면 유리병은 기기 안의 가짜 바다로 돌아가요.")
+                    Text("로그인 없이 익명 계정으로 시작해요. \(loginNames)로 이어 두면 계정이 지켜져요. 계정 정보는 이 iPhone의 키체인에 보관돼요. 끄면 유리병은 기기 안의 가짜 바다로 돌아가요. 입양한 아기가 처음 가족에게 편지를 쓸 때, 내가 찍은 사진의 주제 단어(하늘·고양이·꽃 같은 정해진 단어)만 들어가요. 사진은 보내지 않아요.")
                 }
                 .task { await refreshAccount() }
                 Section {
@@ -132,7 +134,7 @@ struct SettingsScreen: View {
                     Text("사진 보너스는 빛과 픽셀의 변화를 계산해요. 미적 감동이나 사진의 예술성을 평가하는 AI는 아직 연결하지 않았어요.")
                 }.font(.footnote)
                 Section("내 사진, 내 기기에") {
-                    Text("사진과 마리모 기록은 이 iPhone의 앱 보관함에 저장돼요. 사진은 서버로 보내지 않고, 광고·분석 SDK가 없어요. 서버에는 유리병·친구·편지와 대화 모드의 글자(켰을 때)만 오가요. 동네 친구를 찾을 때 구 이름은 Apple 지도 서비스에서 받아와요. ‘찍은 자리를 지도에 남기기’를 켜면 사진마다 찍은 위치가 이 iPhone 안에만 저장돼 지도 방명록에 보여요. 앱을 삭제하면 보관함도 사라져요. 중요한 사진은 사진 앱에 저장해 주세요.").font(.footnote)
+                    Text("사진과 마리모 기록은 이 iPhone의 앱 보관함에 저장돼요. 사진은 서버로 보내지 않고, 광고·분석 SDK가 없어요. 서버에는 유리병·친구·편지, 입양한 아기 편지용 사진 주제 단어, 대화 모드의 글자(켰을 때)만 오가요. 동네 친구를 찾을 때 구 이름은 Apple 지도 서비스에서 받아와요. ‘찍은 자리를 지도에 남기기’를 켜면 사진마다 찍은 위치가 이 iPhone 안에만 저장돼 지도 방명록에 보여요. 앱을 삭제하면 보관함도 사라져요. 중요한 사진은 사진 앱에 저장해 주세요.").font(.footnote)
                     Button("iPhone 설정 열기") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
                 }
                 Section { HStack { Text("SCOO").font(.headline); Spacer(); Text("0.2 · Eternal").font(.caption2).foregroundStyle(.secondary) } }

@@ -50,12 +50,14 @@ enum BottleRules {
     }
 
     /// Letters that have arrived by `now` for every outgoing bottle that asked for news.
-    static func letters(for bottles: [Bottle], now: Date, fast: Bool) -> [BottleLetter] {
+    /// `moments`: words the new families shared (server); nil = the simulated sea makes some up.
+    static func letters(for bottles: [Bottle], now: Date, fast: Bool, moments: [BottleMoment]? = nil) -> [BottleLetter] {
         bottles.filter { $0.direction == .outgoing && $0.wantsNews }.flatMap { bottle -> [BottleLetter] in
             (0..<maxLetters).compactMap { index in
                 let date = letterDate(bottle, index: index, fast: fast)
                 guard date <= now else { return nil }
-                return BottleLetter(id: "\(bottle.id)-\(index)", bottle: bottle, date: date, text: letterText(bottle, index: index))
+                let word = self.word(for: bottle, index: index, fast: fast, moments: moments)
+                return BottleLetter(id: "\(bottle.id)-\(index)", bottle: bottle, date: date, text: letterText(bottle, index: index, word: word))
             }
         }
         .sorted { $0.date > $1.date }
@@ -66,8 +68,24 @@ enum BottleRules {
         bottle.arrivesAt.addingTimeInterval(letterGap(fast: fast) * Double(index) + (fast ? 30 : 6 * 60 * 60))
     }
 
-    /// The same bottle always tells the same story, in the same order.
-    static func letterText(_ bottle: Bottle, index: Int) -> String {
+    /// What letter `index` talks about: a subject the new family photographed since the previous letter.
+    /// On the simulated sea a made-up family photographs something about two letters in three.
+    static func word(for bottle: Bottle, index: Int, fast: Bool, moments: [BottleMoment]?) -> String? {
+        let end = letterDate(bottle, index: index, fast: fast)
+        let start = index == 0 ? bottle.arrivesAt : letterDate(bottle, index: index - 1, fast: fast)
+        guard let moments else {
+            var generator = StableGenerator(seed: StableGenerator.seed(bottle.id) &+ UInt64(index + 1) &* 0x2545F4914F6CDD1D)
+            guard Double.random(in: 0..<1, using: &generator) < 0.66 else { return nil }
+            return LetterWords.words.keys.sorted().randomElement(using: &generator).flatMap { LetterWords.words[$0] }
+        }
+        return moments.first { $0.bottleID == bottle.id && $0.date > start && $0.date <= end }
+            .flatMap { LetterWords.words[$0.subject] }
+    }
+
+    /// The same bottle always tells the same story, in the same order; `word` (what the new family
+    /// photographed) replaces the line when there is one.
+    static func letterText(_ bottle: Bottle, index: Int, word: String? = nil) -> String {
+        if let word { return LetterWords.line(word: word, index: index) }
         var generator = StableGenerator(seed: StableGenerator.seed(bottle.id))
         let place = SeoulDistrict.allCases.randomElement(using: &generator)?.rawValue ?? "어딘가"
         let friend = Species.all.filter { $0.id != bottle.parentA && !$0.isEvent }.randomElement(using: &generator)?.name ?? "새 친구"

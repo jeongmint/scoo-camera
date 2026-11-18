@@ -9,6 +9,12 @@ protocol BottleBackend {
     func send(_ baby: Breed, origin: String, wantsNews: Bool, fast: Bool, now: Date, current: [Bottle]) async throws -> [Bottle]
     /// Marks an arrived bottle opened; returns the updated list.
     func open(_ bottle: Bottle, now: Date, current: [Bottle]) async throws -> [Bottle]
+    /// Words the new families shared for babies this account sent away; nil on the simulated sea.
+    func moments() async throws -> [BottleMoment]?
+}
+
+extension BottleBackend {
+    func moments() async throws -> [BottleMoment]? { nil }
 }
 
 /// Bottles sent and received. Babies move between this and `BreedStore`: sending removes one, opening adopts one.
@@ -20,6 +26,8 @@ final class BottleStore: ObservableObject {
     }
     @Published var message: String?
     @Published private(set) var busy = false
+    /// Words for adopted babies' letters (server); nil = the simulated sea makes them up.
+    @Published private(set) var moments: [BottleMoment]?
     let backend: BottleBackend
 
     init(backend: BottleBackend) {
@@ -40,7 +48,11 @@ final class BottleStore: ObservableObject {
     var isOnline: Bool { backend.isOnline }
 
     func load() async {
-        do { bottles = try await backend.load() }
+        do {
+            bottles = try await backend.load()
+            // Letters still work without the words, so a failure here only drops them.
+            moments = backend.isOnline ? ((try? await backend.moments()) ?? []) : nil
+        }
         catch { message = backend.isOnline ? "유리병을 불러오지 못했어요. \(error.localizedDescription)" : "유리병 기록을 읽지 못했어요. 기존 파일은 그대로 두었어요." }
     }
 
@@ -142,6 +154,12 @@ struct SupabaseBottleBackend: BottleBackend {
         let sent_at: Date
         let arrives_at: Date?
         let opened: Bool
+    }
+
+    func moments() async throws -> [BottleMoment]? {
+        struct Row: Decodable { let bottle_id: UUID; let subject: String; let created_at: Date }
+        let rows = try await client.select("bottle_moments?select=bottle_id,subject,created_at&order=created_at.asc", as: [Row].self)
+        return rows.map { BottleMoment(bottleID: $0.bottle_id, subject: $0.subject, date: $0.created_at) }
     }
 
     func load() async throws -> [Bottle] {
