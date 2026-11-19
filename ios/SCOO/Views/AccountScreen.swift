@@ -219,6 +219,12 @@ private extension Text {
 /// Settings sheets float over the live camera as dark glass instead of a cream page.
 enum Glass {
     static let row = Color.white.opacity(0.12)
+    // Icon tiles in the camera's own earthy tones instead of iOS system colors.
+    static let moss = Color(red: 0.36, green: 0.52, blue: 0.36)
+    static let sea = Color(red: 0.36, green: 0.52, blue: 0.60)
+    static let amber = Color(red: 0.78, green: 0.58, blue: 0.30)
+    static let clay = Color(red: 0.72, green: 0.40, blue: 0.34)
+    static let stone = Color(white: 0.55)
 }
 
 extension View {

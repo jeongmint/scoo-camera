@@ -34,6 +34,7 @@ struct SettingsScreen: View {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(anonymous ? "계정 이어 두기" : "내 계정").font(.headline)
                                 Text(accountLabel).font(.footnote).foregroundStyle(.secondary)
+                                Text(friendsLabel).font(.caption).foregroundStyle(Palette.sage)
                             }
                         }
                         .padding(.vertical, 6)
@@ -41,20 +42,20 @@ struct SettingsScreen: View {
                 }.listRowBackground(Glass.row)
                 .task { await refreshAccount() }
                 Section {
-                    row("카메라", icon: "camera.fill", color: Palette.moss, value: dateStamp ? "날짜 인쇄" : "") { cameraPage }
+                    row("카메라", icon: "camera.fill", color: Glass.moss, value: dateStamp ? "날짜 인쇄" : "") { cameraPage }
                     if SupabaseConfig.isConfigured {
-                        row("유리병 · 편지", icon: "envelope.fill", color: .blue, value: bottleOnline ? "진짜 사람들" : "가짜 바다") { bottlePage }
+                        row("유리병 · 편지", icon: "envelope.fill", color: Glass.sea, value: bottleOnline ? "진짜 사람들" : "가짜 바다") { bottlePage }
                     }
-                    row("대화", icon: "bubble.left.fill", color: .orange, value: replyLabel) { talkPage }
-                    row("알림", icon: "bell.fill", color: .red, value: localAlerts ? "켬" : "끔") { alertsPage }
+                    row("대화", icon: "bubble.left.fill", color: Glass.amber, value: replyLabel) { talkPage }
+                    row("알림", icon: "bell.fill", color: Glass.clay, value: localAlerts ? "켬" : "끔") { alertsPage }
                 }.listRowBackground(Glass.row)
                 Section {
-                    row("SCOO 안내", icon: "book.fill", color: .gray) { guide }
-                    row("개인정보 처리방침", icon: "lock.fill", color: .gray) { PrivacyScreen() }
+                    row("SCOO 안내", icon: "book.fill", color: Glass.stone) { guide }
+                    row("개인정보 처리방침", icon: "lock.fill", color: Glass.stone) { PrivacyScreen() }
                     Button("iPhone 설정 열기") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
                 }.listRowBackground(Glass.row)
                 Section {
-                    row("테스트 도구", icon: "testtube.2", color: Color(white: 0.7)) { testTools }
+                    row("테스트 도구", icon: "testtube.2", color: Glass.stone.opacity(0.6)) { testTools }
                 }.listRowBackground(Glass.row)
                 Section { HStack { Text("SCOO").font(.headline); Spacer(); Text("0.2 · Eternal").font(.caption2).foregroundStyle(.secondary) } }.listRowBackground(Color.clear)
             }.glassSheet()
@@ -143,7 +144,7 @@ struct SettingsScreen: View {
                 }.listRowBackground(Glass.row)
                 Section("작은 친구") {
                     Text("카메라 위의 모리를 짧게 누르면 촬영해요. 0.35초 동안 꾹 누른 뒤 끌면 위치를 옮길 수 있어요. 화면 왼쪽 위 이름을 누르면 성장 기록이 열려요.")
-                    Text("처음 켤 때 있는 서울 구에 따라 귀요·쿠르·모리·냐모 중 한 명이 찾아와요. 사람마다 한 명씩이고, 위치를 쓸 수 없으면 랜덤이에요. 테스트 버전에서는 이벤트 친구 해피(눈사람)도 함께 와요.")
+                    Text("전국 시군구마다 다섯 친구가 살아요. 처음 켤 때 있는 곳의 다섯 친구 중 한 마리가 찾아오고, 위치를 쓸 수 없으면 랜덤이에요. 다른 친구는 하루 한 번 유리병 입양으로 만나요.")
                     Text("촬영 모드 메뉴의 ‘떠 있는 친구’에서 내 친구를 고르면 모리 대신 그 친구가 떠 있어요. ‘사진에 같이 찍기’를 켜면 떠 있던 자리 그대로 사진에도 함께 찍히고, 끄면 화면에만 떠 있어요. ‘기본 모리’를 고르면 다시 모리가 돌아와요.")
                     Text("찍는 순간 모리는 눈을 감고, 사진이 저장되면 표정으로 반응해요. 음식은 냠냠, 빛과 디테일이 좋으면 감탄, 레벨이 오르면 방긋, 그 밖에는 방긋이나 깜짝이에요.")
                     Text("자동 모드는 Apple Vision을 이용해 기기 안에서 음식 여부를 추정해요. 잘못 분류되면 촬영 전 음식 또는 일상 모드를 직접 골라 주세요.")
@@ -179,7 +180,7 @@ struct SettingsScreen: View {
                     Toggle("유리병 빠르게 (1분 배송 테스트)", isOn: $bottleFast)
                     if let note { Text(note).font(.footnote) }
                 } header: { Text("동네 친구") } footer: {
-                    Text("처음엔 지금 있는 시군구의 다섯 친구 중 한 마리만 와요. 더 많은 친구는 하루 한 번 유리병 입양으로 만나요. 다시 받으면 첫 친구만 바뀌고 사진과 성장 기록, 다른 친구는 그대로예요. ‘모든 친구 열기’를 켜면 교배 화면에서 25종을 모두 고를 수 있어요.")
+                    Text("처음엔 지금 있는 시군구의 다섯 친구 중 한 마리만 와요. 더 많은 친구는 하루 한 번 유리병 입양으로 만나요. 다시 받으면 첫 친구만 바뀌고 사진과 성장 기록, 다른 친구는 그대로예요. ‘모든 친구 열기’를 켜면 교배 화면에서 \(Species.all.count)종을 모두 고를 수 있어요.")
                 }.listRowBackground(Glass.row)
         }
         .glassSheet()
@@ -199,6 +200,18 @@ struct SettingsScreen: View {
         anonymous = await client.isAnonymous
         email = await client.email
         provider = await client.provider
+    }
+
+    private var friendsLabel: String {
+        guard let first = friends.starter?.character?.name else { return "아직 친구가 없어요" }
+        if friends.friends.count > 1 { return "\(first) 외 \(friends.friends.count - 1)마리와 함께" }
+        return "\(first)\(Self.withParticle(first)) 함께"
+    }
+
+    /// 와 after a vowel, 과 after a final consonant (쿠르와, 포실과).
+    static func withParticle(_ word: String) -> String {
+        guard let last = word.unicodeScalars.last?.value, (0xAC00...0xD7A3).contains(last) else { return "와" }
+        return (last - 0xAC00) % 28 == 0 ? "와" : "과"
     }
 
     private var accountLabel: String {
