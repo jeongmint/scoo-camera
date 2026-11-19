@@ -13,13 +13,22 @@ struct Bottle: Identifiable, Codable, Equatable {
     /// Where the baby comes from, e.g. "마포구".
     let origin: String
     let sentAt: Date
-    let arrivesAt: Date
+    var arrivesAt: Date
     /// Outgoing: "가끔 소식 전해줘" was ticked, so letters come back.
     var wantsNews = false
     /// Incoming: the user opened it and took the baby in.
     var opened = false
+    /// Outgoing: its sender already got their one thing back (a swapped bottle, or a new friend from the sea).
+    /// Older records decode with nil.
+    var settled: Bool? = nil
 
-    var title: String { "\(Species.find(parentA)?.name ?? parentA) × \(Species.find(parentB)?.name ?? parentB)" }
+    /// A character travelling by itself (not a bred baby): both parents are the same species.
+    var isCharacter: Bool { parentA == parentB }
+    var character: Species? { isCharacter ? Species.find(parentA) : nil }
+    var title: String {
+        if isCharacter { return Species.find(parentA)?.name ?? parentA }
+        return "\(Species.find(parentA)?.name ?? parentA) × \(Species.find(parentB)?.name ?? parentB)"
+    }
     /// The baby as it would look in the family list (for portraits).
     var baby: Breed { Breed(id: id, parentA: parentA, parentB: parentB, born: sentAt, bornAtMoment: 0, origin: origin) }
 
@@ -87,7 +96,7 @@ enum BottleRules {
     static func letterText(_ bottle: Bottle, index: Int, word: String? = nil) -> String {
         if let word { return LetterWords.line(word: word, index: index) }
         var generator = StableGenerator(seed: StableGenerator.seed(bottle.id))
-        let place = SeoulDistrict.allCases.randomElement(using: &generator)?.rawValue ?? "어딘가"
+        let place = Regions.all.randomElement(using: &generator)?.title ?? "어딘가"
         let friend = Species.all.filter { $0.id != bottle.parentA && !$0.isEvent }.randomElement(using: &generator)?.name ?? "새 친구"
         let lines = [
             "잘 도착했어! 여기는 \(place)야. 바람 냄새가 달라.",
@@ -117,7 +126,7 @@ struct LocalOcean: BottleOcean {
         let family = Species.all.filter { !$0.isEvent }
         let a = family.randomElement(using: &generator) ?? Species.all[0]
         let b = family.filter { $0.id != a.id }.randomElement(using: &generator) ?? Species.all[1]
-        let origin = SeoulDistrict.allCases.randomElement(using: &generator)?.rawValue ?? "어딘가"
+        let origin = Regions.all.randomElement(using: &generator)?.title ?? "어딘가"
         // It sets off a little after ours, so it arrives a little after ours too.
         let delay = Double.random(in: 0.1...0.5, using: &generator) * BottleRules.travelTime(fast: fast)
         let sentAt = sent.sentAt.addingTimeInterval(delay)

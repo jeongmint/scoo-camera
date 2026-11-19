@@ -6,6 +6,7 @@ struct SettingsScreen: View {
     @AppStorage("dateStamp") private var dateStamp = true
     @AppStorage("autoSave") private var autoSave = false
     @AppStorage("assignedCompanion") private var assignedRaw = ""
+    @ObservedObject private var friends = FriendStore.shared
     @AppStorage("district") private var districtRaw = ""
     @AppStorage("unlockAllFriends") private var unlockAll = false
     @AppStorage("savePlace") private var savePlace = true
@@ -27,7 +28,7 @@ struct SettingsScreen: View {
                 Section {
                     NavigationLink { AccountScreen() } label: {
                         HStack(spacing: 14) {
-                            Image(Companion(rawValue: assignedRaw)?.assetName ?? "Companion-mori")
+                            Image(friends.starter?.character?.assetName ?? "Companion-mori")
                                 .resizable().scaledToFit().frame(width: 52, height: 52)
                                 .background(Glass.row, in: Circle())
                             VStack(alignment: .leading, spacing: 3) {
@@ -160,12 +161,17 @@ struct SettingsScreen: View {
     private var testTools: some View {
         Form {
                 Section {
-                    LabeledContent("지금 동네", value: districtRaw.isEmpty ? "정해지지 않음" : districtRaw)
-                    LabeledContent("내 친구", value: Companion(rawValue: assignedRaw)?.title ?? "아직 없음")
+                    LabeledContent("지금 동네", value: Regions.resolve(districtRaw)?.title ?? (districtRaw.isEmpty ? "정해지지 않음" : districtRaw))
+                    LabeledContent("첫 친구", value: friends.starter?.character?.name ?? "아직 없음")
+                    LabeledContent("가진 친구", value: "\(friends.friends.count)마리")
                     Button(finding ? "위치 확인 중…" : "내 위치로 다시 찾기") { Task { await findByLocation() } }.disabled(finding)
-                    Menu("구를 직접 골라서 받기") {
-                        ForEach(SeoulDistrict.allCases) { district in
-                            Button("\(district.rawValue) · \(district.primary.title)") { receive(in: district) }
+                    Menu("동네를 직접 골라서 받기") {
+                        ForEach(Province.allCases) { province in
+                            Menu(province.rawValue) {
+                                ForEach(Regions.of(province)) { region in
+                                    Button("\(region.name) · \(region.candidateSpecies.map(\.name).joined(separator: "·"))") { receive(in: region) }
+                                }
+                            }
                         }
                     }
                     Button("랜덤으로 다시 받기") { receiveRandom() }
@@ -173,7 +179,7 @@ struct SettingsScreen: View {
                     Toggle("유리병 빠르게 (1분 배송 테스트)", isOn: $bottleFast)
                     if let note { Text(note).font(.footnote) }
                 } header: { Text("동네 친구") } footer: {
-                    Text("서울 25개 구마다 잘 만나는 친구가 달라요. 구의 친구가 70%, 나머지는 다른 친구예요. 새로 받아도 사진과 성장 기록은 그대로예요. ‘모든 친구 열기’를 켜면 교배 화면에서 25종을 모두 고를 수 있어요.")
+                    Text("처음엔 지금 있는 시군구의 다섯 친구 중 한 마리만 와요. 더 많은 친구는 하루 한 번 유리병 입양으로 만나요. 다시 받으면 첫 친구만 바뀌고 사진과 성장 기록, 다른 친구는 그대로예요. ‘모든 친구 열기’를 켜면 교배 화면에서 25종을 모두 고를 수 있어요.")
                 }.listRowBackground(Glass.row)
         }
         .glassSheet()
@@ -203,27 +209,30 @@ struct SettingsScreen: View {
         return "\(name) · \(email ?? String(id.prefix(8)))"
     }
 
-    private func receive(in district: SeoulDistrict) {
+    /// Testing: draw the first friend again from a place's 5 (other friends stay).
+    private func receive(in region: Region) {
         var generator = SystemRandomNumberGenerator()
-        let friend = Companion.assign(in: district, using: &generator)
-        districtRaw = district.rawValue
-        assignedRaw = friend.rawValue
-        note = "\(district.rawValue) · \(friend.title)"
+        let friend = region.drawStarter(using: &generator)
+        districtRaw = region.id
+        assignedRaw = friend.id
+        friends.setStarter(friend, origin: region.title)
+        note = "\(region.title)의 다섯 친구 중 \(friend.name)"
     }
 
     private func receiveRandom() {
         var generator = SystemRandomNumberGenerator()
-        let friend = Companion.assign(using: &generator)
+        let friend = Regions.randomStarter(using: &generator)
         districtRaw = ""
-        assignedRaw = friend.rawValue
-        note = "랜덤 · \(friend.title)"
+        assignedRaw = friend.id
+        friends.setStarter(friend, origin: nil)
+        note = "랜덤 · \(friend.name)"
     }
 
     private func findByLocation() async {
         finding = true
         defer { finding = false }
-        switch await locator.currentDistrict() {
-        case .success(let district): receive(in: district)
+        switch await locator.currentRegion() {
+        case .success(let region): receive(in: region)
         case .failure(let failure): note = failure.reason
         }
     }

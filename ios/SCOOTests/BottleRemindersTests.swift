@@ -49,4 +49,15 @@ final class BottleRemindersTests: XCTestCase {
         let sent = bottle(.outgoing, arrives: -3 * 24 * 3600, news: true)
         XCTAssertEqual(BottleRules.letters(for: [sent], now: now, fast: false).count, 2)
     }
+
+    func testAWaitingBottleRingsWhenTheSeaAnswers() {
+        let waiting = Bottle(id: UUID(), direction: .outgoing, parentA: "mori", parentB: "mori", origin: "서울 마포구",
+                             sentAt: now.addingTimeInterval(-3600), arrivesAt: .distantFuture, wantsNews: true)
+        let plan = BottleReminders.plan([waiting], now: now, fast: false)
+        XCTAssertEqual(plan.count, 1, "편지는 아직, 바다의 답만")
+        XCTAssertEqual(plan[0].date, waiting.sentAt.addingTimeInterval(BottleRules.travelTime(fast: false)))
+        var settled = waiting
+        settled.settled = true
+        XCTAssertTrue(BottleReminders.plan([settled], now: now, fast: false).isEmpty)
+    }
 }

@@ -32,6 +32,12 @@ enum LetterWords {
         return word + ((last.value - 0xAC00) % 28 == 0 ? "를" : "을")
     }
 
+    /// The word with 은/는 (topic), chosen like `withObjectParticle`.
+    static func withTopicParticle(_ word: String) -> String {
+        guard let last = word.unicodeScalars.last, (0xAC00...0xD7A3).contains(last.value) else { return word + "은(는)" }
+        return word + ((last.value - 0xAC00) % 28 == 0 ? "는" : "은")
+    }
+
     /// A letter line built around what the new family photographed.
     static func line(word: String, index: Int) -> String {
         switch index % 3 {

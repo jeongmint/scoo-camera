@@ -17,6 +17,7 @@ struct CameraScreen: View {
     @AppStorage("district") private var districtRaw = ""
     @StateObject private var locator = DistrictLocator()
     @AppStorage("companion") private var companionRaw = ""
+    @ObservedObject private var friends = FriendStore.shared
     /// Whether the floating friend is also drawn into the photo, or only floats on screen.
     @AppStorage("companionInPhoto") private var companionInPhoto = true
     /// Leave each photo's spot on the map guestbook.
@@ -61,9 +62,10 @@ struct CameraScreen: View {
     private var canCapture: Bool { !blocked && camera.isRunning && scenePhase == .active && sheet == nil }
     /// The friend this user was randomly handed on first launch, and the friends they can shoot with
     /// (that one plus any open event friend such as the snowman).
-    private var ownedCompanions: [Companion] { Companion(rawValue: assignedRaw).map(Companion.owned(assigned:)) ?? [] }
+    /// The characters this user has; any of them can float in Mori's place.
+    private var ownedCompanions: [Species] { friends.species }
     /// The friend to shoot together with; nil means shooting alone.
-    private var companion: Companion? { Companion(rawValue: companionRaw).flatMap { ownedCompanions.contains($0) ? $0 : nil } }
+    private var companion: Species? { Species.find(companionRaw).flatMap { friends.owns($0.id) ? $0 : nil } }
     private var moriSize: CGFloat { min(105, 78 + CGFloat(sqrt(Double(max(0, garden.snapshot.experience)))) * 0.3) }
     /// Who answers in talk mode: the floating friend, with the personality grown from the photos.
     private var talkPet: TalkPet {
@@ -271,7 +273,7 @@ struct CameraScreen: View {
                     Section("떠 있는 친구") {
                         Picker("떠 있는 친구", selection: $companionRaw) {
                             Text("기본 모리").tag("")
-                            ForEach(ownedCompanions) { friend in Text(friend.menuTitle).tag(friend.rawValue) }
+                            ForEach(ownedCompanions) { friend in Text(friend.menuTitle).tag(friend.id) }
                         }
                     }
                     Section {
@@ -288,7 +290,7 @@ struct CameraScreen: View {
                     }
                 } label: {
                     HStack(spacing: 5) {
-                        Text(companion.map { "\(mode.title) · \($0.title)" } ?? mode.title)
+                        Text(companion.map { "\(mode.title) · \($0.name)" } ?? mode.title)
                         if companion != nil && companionInPhoto {
                             Image(systemName: "camera.fill").font(.system(size: 8))
                         }
@@ -297,7 +299,7 @@ struct CameraScreen: View {
                         .font(.system(size: 11, weight: .medium)).padding(.horizontal, 15).frame(height: 38)
                         .background(.black.opacity(0.25), in: Capsule())
                 }.disabled(blocked)
-                    .accessibilityLabel("촬영 모드, \(mode.title), \(companion.map { "\($0.title), " + (companionInPhoto ? "사진에 같이 찍기" : "화면에만") } ?? "기본 모리")")
+                    .accessibilityLabel("촬영 모드, \(mode.title), \(companion.map { "\($0.name), " + (companionInPhoto ? "사진에 같이 찍기" : "화면에만") } ?? "기본 모리")")
                 Spacer()
                 Button { camera.flip() } label: {
                     Image(systemName: "arrow.triangle.2.circlepath.camera").font(.system(size: 21)).frame(width: 48, height: 48)
@@ -416,7 +418,7 @@ struct CameraScreen: View {
         .animation(.spring(response: 0.25, dampingFraction: 0.7), value: moving)
         .gesture(press)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(companion?.title ?? garden.snapshot.name), 사진 촬영")
+        .accessibilityLabel("\(companion?.name ?? garden.snapshot.name), 사진 촬영")
         .accessibilityValue("레벨 \(garden.growth.level)")
         .accessibilityHint("두 번 탭하면 촬영합니다. 화면에서 꾹 누르고 끌면 이동합니다.")
         .accessibilityAddTraits(.isButton)
@@ -454,22 +456,29 @@ struct CameraScreen: View {
         }
     }
 
-    /// First launch: the friend a user gets depends on the Seoul district they are in.
-    /// Without a usable position (permission, signal, outside Seoul) the draw is plain random.
+    /// First launch: one of the 5 characters of the 시군구 the user is in, at random.
+    /// Without a usable position (permission, signal, outside Korea) a random place's 5 are used.
     private func meetFriend() async {
-        guard Companion(rawValue: assignedRaw) == nil else { return }
+        guard !friends.hasStarter else { return }
         var generator = SystemRandomNumberGenerator()
-        switch await locator.currentDistrict() {
-        case .success(let district):
-            let friend = Companion.assign(in: district, using: &generator)
-            districtRaw = district.rawValue
-            assignedRaw = friend.rawValue
-            notify("\(district.rawValue)에서 새 친구 도착! \(friend.title)")
+        switch await locator.currentRegion() {
+        case .success(let region):
+            let friend = region.drawStarter(using: &generator)
+            start(with: friend, region: region)
+            newFriend = NewFriend(species: friend, region: region, kind: .starter)
         case .failure(let failure):
-            let friend = Companion.assign(using: &generator)
-            districtRaw = ""
-            assignedRaw = friend.rawValue
-            notify("새 친구 도착! \(friend.title) · \(failure.reason) 이번엔 랜덤으로 왔어요.")
+            let friend = Regions.randomStarter(using: &generator)
+            start(with: friend, region: nil)
+            notify("첫 친구 도착! \(friend.name) · \(failure.reason) 이번엔 랜덤으로 왔어요.")
+        }
+    }
+
+    private func start(with friend: Species, region: Region?) {
+        districtRaw = region?.id ?? ""
+        assignedRaw = friend.id
+        friends.setStarter(friend, origin: region?.title)
+        for event in Species.openEvents() where !friends.owns(event) {
+            if let species = Species.find(event) { friends.add(species, how: .event, origin: nil) }
         }
     }
 
@@ -581,7 +590,7 @@ struct CameraScreen: View {
         }
     }
 
-    private func process(_ data: Data, mode: CaptureMode, stamp: Bool, aspect: CGFloat?, companion: Companion?, spot: CompanionSpot,
+    private func process(_ data: Data, mode: CaptureMode, stamp: Bool, aspect: CGFloat?, companion: Species?, spot: CompanionSpot,
                          place: PhotoLocation?) async {
         defer { processing = false }
         do {
@@ -604,7 +613,7 @@ struct CameraScreen: View {
             } else {
             notify(garden.growth.level > oldLevel
                    ? "\(garden.snapshot.name), LV.\(garden.growth.level)! 또 자랐어 🌱"
-                   : "\(companion.map { "\($0.title)랑 같이 찰칵! " } ?? "")\(result.isFood ? "냠냠, 든든한 한 끼" : "이 순간 마음에 들어") · +\(gain) EXP")
+                   : "\(companion.map { "\($0.name)랑 같이 찰칵! " } ?? "")\(result.isFood ? "냠냠, 든든한 한 끼" : "이 순간 마음에 들어") · +\(gain) EXP")
             }
             if autoSave {
                 do { try await PhotoLibraryWriter.save(result.jpeg) }
@@ -614,13 +623,12 @@ struct CameraScreen: View {
         } catch { calmDown(); notify("저장하지 못했어요. \(error.localizedDescription)") }
     }
 
-    /// 동네 탐험: the first photo in a Seoul district not visited yet meets that district's friend.
+    /// 동네 탐험: the first photo in a 시군구 not visited yet stamps it in the collection.
+    /// New characters come only from glass bottles (adopted, or brought by the sea).
     private func explore(_ place: PhotoLocation) async {
-        guard let district = await locator.district(at: place) else { return }
-        let drawn = Set(ownedCompanions.map(\.rawValue))
-        guard let friend = Exploration.record(district, owned: drawn) else { return }
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
-        newFriend = NewFriend(species: friend, district: district)
+        guard let region = await locator.region(at: place), Exploration.record(region) else { return }
+        UISelectionFeedbackGenerator().selectionChanged()
+        notify("\(region.title) 첫 방문 도장! 도감에 찍혔어요. (\(Exploration.load().visited.count)/\(Regions.all.count))")
     }
 
     private func notify(_ message: String) {
@@ -666,8 +674,10 @@ private struct FloatingFriend: View {
 }
 
 struct NewFriend: Identifiable {
+    enum Kind { case starter, sea, adopted }
     let species: Species
-    let district: SeoulDistrict
+    let region: Region?
+    var kind: Kind = .starter
     var id: String { species.id }
 }
 
@@ -675,12 +685,32 @@ struct NewFriend: Identifiable {
 private struct NewFriendSheet: View {
     let meeting: NewFriend
     @Environment(\.dismiss) private var dismiss
+
+    private var heading: String {
+        switch meeting.kind {
+        case .starter: return meeting.region.map { "\($0.title)에서 시작해요" } ?? "반가워요"
+        case .sea: return "바다에서 떠내려왔어요"
+        case .adopted: return "유리병을 타고 왔어요"
+        }
+    }
     var body: some View {
         VStack(spacing: 16) {
-            Text("\(meeting.district.rawValue) 첫 방문!").font(.subheadline).foregroundStyle(.secondary)
+            Text(heading).font(.subheadline).foregroundStyle(.secondary)
             SpeciesPortrait(species: meeting.species).frame(width: 200, height: 200)
-            Text("새 친구, \(meeting.species.name)").font(.title3.weight(.semibold))
-            Text("친구 도감에 들어갔고, 이제 교배할 때 부모로 고를 수 있어요.")
+            Text(meeting.kind == .starter ? "첫 친구, \(meeting.species.name)" : "새 친구, \(meeting.species.name)")
+                .font(.title3.weight(.semibold))
+            if let region = meeting.region, meeting.kind == .starter {
+                HStack(spacing: 6) {
+                    ForEach(region.candidateSpecies) { other in
+                        SpeciesPortrait(species: other).frame(width: 34, height: 34)
+                            .opacity(other.id == meeting.species.id ? 1 : 0.35)
+                    }
+                }
+                Text("\(region.title)의 다섯 친구 중 하나가 왔어요").font(.caption).foregroundStyle(.secondary)
+            }
+            Text(meeting.kind == .starter
+                 ? "더 많은 친구는 유리병 입양으로 만나요. 하루 한 번 친구를 띄우면 다음 날 누군가의 친구나 바다의 새 친구가 와요."
+                 : "친구 도감에 들어갔고, 이제 교배할 때 부모로 고를 수 있어요.")
                 .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
             Button("반가워!") { dismiss() }
                 .font(.headline).padding(.horizontal, 36).padding(.vertical, 12)

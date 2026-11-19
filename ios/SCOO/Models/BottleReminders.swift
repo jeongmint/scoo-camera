@@ -24,7 +24,14 @@ enum BottleReminders {
                 reminders.append(Reminder(id: "\(prefix)arrive-\(bottle.id)", date: bottle.arrivesAt,
                                           title: "유리병이 도착했어요",
                                           body: "\(bottle.origin)에서 \(bottle.title) 아기가 떠내려왔어요. 열어 볼까요?"))
-            case .outgoing where bottle.wantsNews:
+            case .outgoing where bottle.isWaitingAtSea && bottle.settled != true:
+                // nobody came yet: the next day the sea brings a new character (unless someone swaps first)
+                let due = bottle.sentAt.addingTimeInterval(BottleRules.travelTime(fast: fast))
+                if due > now {
+                    reminders.append(Reminder(id: "\(prefix)sea-\(bottle.id)", date: due, title: "유리병의 답이 왔어요",
+                                              body: "바다에서 새 친구가 떠내려왔을지도 몰라요. 열어 볼까요?"))
+                }
+            case .outgoing where bottle.wantsNews && !bottle.isWaitingAtSea:
                 for index in 0..<BottleRules.maxLetters {
                     let date = BottleRules.letterDate(bottle, index: index, fast: fast)
                     guard date > now else { continue }
