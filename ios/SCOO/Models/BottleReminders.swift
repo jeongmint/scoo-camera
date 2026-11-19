@@ -16,7 +16,9 @@ enum BottleReminders {
     /// iOS keeps at most 64 pending notifications per app; leave room for others.
     static let limit = 48
 
-    static func plan(_ bottles: [Bottle], now: Date, fast: Bool) -> [Reminder] {
+    /// `real`: with real people only the first letter is sure to come (later ones need a shared word), so only
+    /// that one is announced ahead; the rest show up in the app when they do come.
+    static func plan(_ bottles: [Bottle], now: Date, fast: Bool, real: Bool = false) -> [Reminder] {
         var reminders: [Reminder] = []
         for bottle in bottles {
             switch bottle.direction {
@@ -32,7 +34,7 @@ enum BottleReminders {
                                               body: "바다에서 새 친구가 떠내려왔을지도 몰라요. 열어 볼까요?"))
                 }
             case .outgoing where bottle.wantsNews && !bottle.isWaitingAtSea:
-                for index in 0..<BottleRules.maxLetters {
+                for index in 0..<(real ? 1 : BottleRules.maxLetters) {
                     let date = BottleRules.letterDate(bottle, index: index, fast: fast)
                     guard date > now else { continue }
                     reminders.append(Reminder(id: "\(prefix)letter-\(bottle.id)-\(index)", date: date,

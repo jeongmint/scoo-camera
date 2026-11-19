@@ -46,8 +46,10 @@ struct BottleLetter: Identifiable, Equatable {
 enum BottleRules {
     /// Normal travel time, and the quick one for testing.
     static func travelTime(fast: Bool) -> TimeInterval { fast ? 60 : 24 * 60 * 60 }
-    /// Gap between letters from an adopted baby.
-    static func letterGap(fast: Bool) -> TimeInterval { fast ? 120 : 2 * 24 * 60 * 60 }
+    /// Gap between letters from an adopted baby (빠른 시험에서도 너무 쏟아지지 않게 10분).
+    static func letterGap(fast: Bool) -> TimeInterval { fast ? 10 * 60 : 3 * 24 * 60 * 60 }
+    /// The first letter, a while after the baby arrives.
+    static func firstLetterDelay(fast: Bool) -> TimeInterval { fast ? 60 : 6 * 60 * 60 }
     static let maxLetters = 6
     /// Bottles a user may send per day (no limit in fast test mode).
     static let dailySends = 1
@@ -59,14 +61,18 @@ enum BottleRules {
     }
 
     /// Letters that have arrived by `now` for every outgoing bottle that asked for news.
-    /// `moments`: words the new families shared (server); nil = the simulated sea makes some up.
+    /// `moments`: words the new families shared (server). With real people nothing is made up: the first letter
+    /// only says the baby arrived, and later letters come only when the new family shared a word.
+    /// nil = the simulated sea, which makes everything up.
     static func letters(for bottles: [Bottle], now: Date, fast: Bool, moments: [BottleMoment]? = nil) -> [BottleLetter] {
         bottles.filter { $0.direction == .outgoing && $0.wantsNews }.flatMap { bottle -> [BottleLetter] in
             (0..<maxLetters).compactMap { index in
                 let date = letterDate(bottle, index: index, fast: fast)
                 guard date <= now else { return nil }
                 let word = self.word(for: bottle, index: index, fast: fast, moments: moments)
-                return BottleLetter(id: "\(bottle.id)-\(index)", bottle: bottle, date: date, text: letterText(bottle, index: index, word: word))
+                if moments != nil, index > 0, word == nil { return nil }
+                return BottleLetter(id: "\(bottle.id)-\(index)", bottle: bottle, date: date,
+                                    text: letterText(bottle, index: index, word: word, real: moments != nil))
             }
         }
         .sorted { $0.date > $1.date }
@@ -74,7 +80,7 @@ enum BottleRules {
 
     /// When letter `index` (0..<maxLetters) of an adopted baby comes back: a few hours after arrival, then every gap.
     static func letterDate(_ bottle: Bottle, index: Int, fast: Bool) -> Date {
-        bottle.arrivesAt.addingTimeInterval(letterGap(fast: fast) * Double(index) + (fast ? 30 : 6 * 60 * 60))
+        bottle.arrivesAt.addingTimeInterval(letterGap(fast: fast) * Double(index) + firstLetterDelay(fast: fast))
     }
 
     /// What letter `index` talks about: a subject the new family photographed since the previous letter.
@@ -91,16 +97,20 @@ enum BottleRules {
             .flatMap { LetterWords.words[$0.subject] }
     }
 
+    /// The first letter with real people when the new family has not shared anything yet: only what is true.
+    static let realArrival = "잘 도착했어! 새 가족을 만났어. 가끔 소식 전할게."
+
     /// The same bottle always tells the same story, in the same order; `word` (what the new family
-    /// photographed) replaces the line when there is one.
-    static func letterText(_ bottle: Bottle, index: Int, word: String? = nil) -> String {
+    /// photographed) replaces the line when there is one. `real`: never invent places or friends.
+    static func letterText(_ bottle: Bottle, index: Int, word: String? = nil, real: Bool = false) -> String {
         if let word { return LetterWords.line(word: word, index: index) }
+        if real { return realArrival }
         var generator = StableGenerator(seed: StableGenerator.seed(bottle.id))
         let place = Regions.all.randomElement(using: &generator)?.title ?? "어딘가"
         let friend = Species.all.filter { $0.id != bottle.parentA && !$0.isEvent }.randomElement(using: &generator)?.name ?? "새 친구"
         let lines = [
-            "잘 도착했어! 여기는 \(place)야. 바람 냄새가 달라.",
-            "여기서 \(friend)라는 친구가 생겼어.",
+            "잘 도착했어! 여기는 \(LetterWords.withCopula(place)). 바람 냄새가 달라.",
+            "여기서 \(LetterWords.withQuote(friend)) 친구가 생겼어.",
             "새 보호자가 맛있는 걸 잔뜩 찍어 줬어. 나 조금 컸다!",
             "\(bottle.origin) 출신이라고 다들 신기해해.",
             "오늘은 처음 보는 하늘을 봤어. 너도 같은 하늘 보고 있어?",
