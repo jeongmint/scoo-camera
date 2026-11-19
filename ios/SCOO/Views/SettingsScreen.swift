@@ -12,7 +12,7 @@ struct SettingsScreen: View {
     @AppStorage("unlockAllFriends") private var unlockAll = false
     @AppStorage("savePlace") private var savePlace = true
     @AppStorage("bottleFastMode") private var bottleFast = false
-    @AppStorage("bottleOnline") private var bottleOnline = true
+    @AppStorage(OperatorMode.key) private var operatorOn = false
     @AppStorage("talkOnline") private var talkOnline = true
     @AppStorage("localAlerts") private var localAlerts = true
     @AppStorage("shareMoments") private var shareMoments = true
@@ -43,6 +43,11 @@ struct SettingsScreen: View {
                     LabeledContent("지금 동네", value: Regions.resolve(districtRaw)?.title ?? (districtRaw.isEmpty ? "정해지지 않음" : districtRaw))
                     LabeledContent("첫 친구", value: friends.starter?.character?.name ?? "아직 없음")
                     LabeledContent("가진 친구", value: "\(friends.friends.count)마리")
+                } header: { Text("동네 친구") } footer: {
+                    Text("처음엔 지금 있는 시군구의 다섯 친구 중 한 마리만 와요. 계절마다 계절 친구도 한 마리 찾아와요. 더 많은 친구는 하루 한 번 유리병 입양으로 만나요.")
+                }
+                if operatorOn {
+                Section {
                     Button(finding ? "위치 확인 중…" : "내 위치로 다시 찾기") { Task { await findByLocation() } }.disabled(finding)
                     Menu("동네를 직접 골라서 받기") {
                         ForEach(Province.allCases) { province in
@@ -57,8 +62,9 @@ struct SettingsScreen: View {
                     Toggle("모든 친구 열기 (교배 테스트)", isOn: $unlockAll)
                     Toggle("유리병 빠르게 (1분 배송 테스트)", isOn: $bottleFast)
                     if let note { Text(note).font(.footnote) }
-                } header: { Text("동네 친구 (테스트)") } footer: {
-                    Text("처음엔 지금 있는 시군구의 다섯 친구 중 한 마리만 와요. 더 많은 친구는 하루 한 번 유리병 입양으로 만나요. 다시 받으면 첫 친구만 바뀌고 사진과 성장 기록, 다른 친구는 그대로예요. ‘모든 친구 열기’를 켜면 교배 화면에서 25종을 모두 고를 수 있어요.")
+                } header: { Text("운영자 모드") } footer: {
+                    Text("운영자 계정에만 보여요. 첫 친구를 다시 받으면 첫 친구만 바뀌고 사진과 성장 기록, 다른 친구는 그대로예요. ‘모든 친구 열기’를 켜면 교배 화면에서 \(Species.regulars.count)종을 모두 고를 수 있어요. 1분 배송과 하루 여러 번 띄우기는 서버도 운영자에게만 허락해요.")
+                }
                 }
                 Section {
                     if SupabaseConfig.isConfigured {
@@ -95,7 +101,6 @@ struct SettingsScreen: View {
                         if accountID == nil {
                             Button(connecting ? "연결 중…" : "서버에 연결하기") { Task { await connect() } }.disabled(connecting)
                         }
-                        Toggle("유리병을 진짜 사람들과 주고받기", isOn: $bottleOnline)
                         Toggle("입양한 아기 편지에 사진 주제 보내기", isOn: $shareMoments)
                         if accountID != nil {
                             HStack {
@@ -125,7 +130,7 @@ struct SettingsScreen: View {
                         Text("서버 키가 아직 없어서 유리병은 이 기기 안에서만 시험해요.").font(.footnote)
                     }
                 } header: { Text("계정 · 서버") } footer: {
-                    Text("로그인 없이 익명 계정으로 시작해요. \(loginNames)로 이어 두면 계정이 지켜져요. 계정 정보는 이 iPhone의 키체인에 보관돼요. 끄면 유리병은 기기 안의 가짜 바다로 돌아가요. 입양한 아기가 처음 가족에게 편지를 쓸 때, 내가 찍은 사진의 주제 단어(하늘·고양이·꽃 같은 정해진 단어)만 들어가요. 사진은 보내지 않아요.")
+                    Text("로그인 없이 익명 계정으로 시작해요. \(loginNames)로 이어 두면 계정이 지켜져요. 계정 정보는 이 iPhone의 키체인에 보관돼요. 입양한 아기가 처음 가족에게 편지를 쓸 때, 내가 찍은 사진의 주제 단어(하늘·고양이·꽃 같은 정해진 단어)만 들어가요. 사진은 보내지 않아요.")
                 }
                 .task { await refreshAccount() }
                 Section {
@@ -145,7 +150,7 @@ struct SettingsScreen: View {
                 }
                 Section("작은 친구") {
                     Text("카메라 위의 모리를 짧게 누르면 촬영해요. 0.35초 동안 꾹 누른 뒤 끌면 위치를 옮길 수 있어요. 화면 왼쪽 위 이름을 누르면 성장 기록이 열려요.")
-                    Text("처음 켤 때 있는 서울 구에 따라 귀요·쿠르·모리·냐모 중 한 명이 찾아와요. 사람마다 한 명씩이고, 위치를 쓸 수 없으면 랜덤이에요. 테스트 버전에서는 이벤트 친구 해피(눈사람)도 함께 와요.")
+                    Text("처음 켤 때 있는 시군구의 다섯 친구 중 한 명이 찾아와요. 위치를 쓸 수 없으면 아무 동네에서나 한 명이 와요. 계절마다 계절 친구(봄 보미, 여름 소르, 가을 도토, 겨울 해피)도 찾아와요.")
                     Text("촬영 모드 메뉴의 ‘떠 있는 친구’에서 내 친구를 고르면 모리 대신 그 친구가 떠 있어요. ‘사진에 같이 찍기’를 켜면 떠 있던 자리 그대로 사진에도 함께 찍히고, 끄면 화면에만 떠 있어요. ‘기본 모리’를 고르면 다시 모리가 돌아와요.")
                     Text("찍는 순간 모리는 눈을 감고, 사진이 저장되면 표정으로 반응해요. 음식은 냠냠, 빛과 디테일이 좋으면 감탄, 레벨이 오르면 방긋, 그 밖에는 방긋이나 깜짝이에요.")
                     Text("자동 모드는 Apple Vision을 이용해 기기 안에서 음식 여부를 추정해요. 잘못 분류되면 촬영 전 음식 또는 일상 모드를 직접 골라 주세요.")
@@ -198,6 +203,7 @@ struct SettingsScreen: View {
         email = await client.email
         provider = await client.provider
         if accountID != nil { await social.refresh() }
+        await OperatorMode.refresh()
     }
 
     /// Apple only shows up in builds signed by a paid team.

@@ -1,7 +1,7 @@
 import Foundation
 
 /// A glass bottle carrying a baby to someone else ("유리병 입양").
-/// In this test build the other side is simulated on the device (`LocalOcean`); a server can take its place later.
+/// Between real people through the server; `LocalOcean` simulates the other side only for builds without server keys and tests.
 struct Bottle: Identifiable, Codable, Equatable {
     enum Direction: String, Codable { case outgoing, incoming }
 
@@ -120,8 +120,7 @@ enum BottleRules {
     }
 }
 
-/// The other side of the sea. The local one invents a bottle from somewhere in Seoul for every bottle sent;
-/// a server-backed one would hand back a real bottle from another user.
+/// The other side of the sea when there is no server: invents a bottle from somewhere for every bottle sent.
 protocol BottleOcean {
     func bottleInReturn(for sent: Bottle, fast: Bool) -> Bottle
 }
