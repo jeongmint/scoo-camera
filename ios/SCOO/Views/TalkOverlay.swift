@@ -25,8 +25,6 @@ struct TalkGlow: View {
                     layer.addFilter(.blur(radius: 16 + 14 * energy))
                     layer.stroke(edge, with: .color(color.opacity(0.30 + 0.40 * energy)), lineWidth: 14 + 30 * energy)
                 }
-                context.stroke(edge, with: .color(color.opacity(0.35 + 0.45 * energy)), lineWidth: 1.5 + 2 * energy)
-
             }
         }
         .ignoresSafeArea()
