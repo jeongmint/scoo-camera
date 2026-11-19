@@ -4,9 +4,8 @@ extension TalkPet {
     var color: Color { Color(red: tint.red, green: tint.green, blue: tint.blue) }
 }
 
-/// The frame of the camera glowing softly in the friend's color, with little equalizer bars along all four
-/// edges that move with the voice: the microphone while listening, the friend while it speaks, a slow
-/// breath while it thinks.
+/// The frame of the camera glowing softly in the friend's color, swelling with the voice: the microphone
+/// while listening, the friend while it speaks, a slow breath while it thinks.
 struct TalkGlow: View {
     let color: Color
     let level: Double
@@ -28,32 +27,6 @@ struct TalkGlow: View {
                 }
                 context.stroke(edge, with: .color(color.opacity(0.35 + 0.45 * energy)), lineWidth: 1.5 + 2 * energy)
 
-                // equalizer bars pointing inward from each edge
-                let spacing: CGFloat = 15
-                let inset: CGFloat = corner * 0.75
-                var bars = Path()
-                var index = 0
-                func bar(at point: CGPoint, inward: CGVector) {
-                    let wave = 0.30 + 0.70 * abs(sin(time * 6.1 + Double(index) * 0.83) * cos(time * 3.3 + Double(index) * 0.29))
-                    let length = 3 + CGFloat(26 * energy * wave)
-                    bars.move(to: CGPoint(x: point.x + inward.dx * 5, y: point.y + inward.dy * 5))
-                    bars.addLine(to: CGPoint(x: point.x + inward.dx * (5 + length), y: point.y + inward.dy * (5 + length)))
-                    index += 1
-                }
-                var x = inset
-                while x <= size.width - inset {
-                    bar(at: CGPoint(x: x, y: 0), inward: CGVector(dx: 0, dy: 1))
-                    bar(at: CGPoint(x: size.width - x, y: size.height), inward: CGVector(dx: 0, dy: -1))
-                    x += spacing
-                }
-                var y = inset
-                while y <= size.height - inset {
-                    bar(at: CGPoint(x: 0, y: y), inward: CGVector(dx: 1, dy: 0))
-                    bar(at: CGPoint(x: size.width, y: size.height - y), inward: CGVector(dx: -1, dy: 0))
-                    y += spacing
-                }
-                context.stroke(bars, with: .color(color.opacity(0.55 + 0.4 * energy)),
-                               style: StrokeStyle(lineWidth: 3, lineCap: .round))
             }
         }
         .ignoresSafeArea()
