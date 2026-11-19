@@ -43,17 +43,17 @@ struct PrivacyScreen: View {
         List {
             Section {
                 Text("스쿠카메라가 어떤 정보를 어디에 두는지 적어 두었어요.").font(.footnote)
-            }
+            }.listRowBackground(Glass.row)
             ForEach(parts) { part in
                 Section(part.title) {
                     ForEach(part.lines, id: \.self) { Text($0).font(.footnote) }
-                }
+                }.listRowBackground(Glass.row)
             }
             Section {
                 Text("2026년 11월 18일 기준").font(.caption2).foregroundStyle(.secondary)
-            }
+            }.listRowBackground(Glass.row)
         }
-        .scrollContentBackground(.hidden).background(Palette.cream)
+        .glassSheet()
         .navigationTitle("개인정보 처리방침").navigationBarTitleDisplayMode(.inline)
     }
 }

@@ -21,7 +21,9 @@ struct SCOOApp: App {
                     // Reschedule bottle notifications at launch (loading the bottles does it). Online, only for an
                     // account that already exists: launching the app must not create one.
                     let bottles = BottleStore.preferred()
-                    if !bottles.isOnline || (await SupabaseClient.shared.currentUserID) != nil { await bottles.load() }
+                    // `await` is not allowed on the right of `||`, so resolve the account first (online only).
+                    let hasAccount = bottles.isOnline ? await SupabaseClient.shared.currentUserID != nil : false
+                    if !bottles.isOnline || hasAccount { await bottles.load() }
                 }
         }
     }
