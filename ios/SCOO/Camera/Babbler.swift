@@ -1,9 +1,9 @@
 import Foundation
 import AVFoundation
 
-/// How the 모리들 talk out loud: not a reading voice but a quick, cute babble. Every syllable of the reply
-/// becomes one tiny blip in that syllable's vowel color (ㅏ bright, ㅜ round, ㅣ thin…), strung together
-/// fast, with a little wobble in pitch. Each 모리 has its own pitch, so they all sound different.
+/// How the 모리들 talk out loud: not a reading voice but a soft, cute murmur. Every syllable of the reply
+/// gets that syllable's vowel color (ㅏ bright, ㅜ round, ㅣ thin…), and the syllables flow into each other
+/// in one smooth voice, pausing only at punctuation. Each 모리 has its own pitch, so they all sound different.
 /// Everything is synthesized here; there are no sound files.
 @MainActor
 final class Babbler {
@@ -134,51 +134,72 @@ final class Babbler {
     nonisolated static func render(_ syllables: [Syllable], pitch: Double) -> Speech {
         let rate = sampleRate
         let base = baseFrequency(pitch: pitch)
-        // higher voices chatter a bit faster
-        let length = max(0.055, 0.082 - (pitch - 1) * 0.04)
+        // higher voices talk a little faster
+        let length = max(0.075, 0.105 - (pitch - 1) * 0.04)
         var generator = SeededRandom(seed: UInt64(syllables.count) &* 7919 &+ UInt64(base))
+
+        // One continuous voice per phrase: the syllables flow into each other (pitch and vowel color glide,
+        // the loudness only dips between them), and there is silence only at punctuation.
         var samples: [Float] = []
         var blips: [(time: Double, loudness: Double)] = []
-        samples.reserveCapacity(Int(Double(syllables.count) * (length + 0.05) * rate))
+        samples.reserveCapacity(Int(Double(syllables.count) * (length + 0.04) * rate))
+        let smoothing = 1 - exp(-1 / (0.018 * rate))
+        let fade = 0.025 * rate
+        var phrase: [(syllable: Syllable, f0: Double, glide: Double, count: Int, loudness: Double)] = []
+
+        func flush(pause: Double) {
+            guard let first = phrase.first else { return }
+            let total = phrase.reduce(0) { $0 + $1.count }
+            var frequency = first.f0
+            var (f1, f2) = formants[first.syllable.vowel]!
+            var phase = 0.0
+            var written = 0
+            for part in phrase {
+                blips.append((Double(samples.count) / rate, part.loudness))
+                let (t1, t2) = formants[part.syllable.vowel]!
+                for n in 0..<part.count {
+                    let t = Double(n) / Double(part.count)
+                    frequency += (part.f0 * (1 + part.glide * t) - frequency) * smoothing
+                    f1 += (t1 - f1) * smoothing
+                    f2 += (t2 - f2) * smoothing
+                    phase += 2 * .pi * frequency / rate
+                    var value = 0.0
+                    var harmonic = 1.0
+                    while harmonic * frequency < 5000 && harmonic <= 14 {
+                        let f = harmonic * frequency
+                        let gain = exp(-pow((f - f1) / 200, 2)) + 0.6 * exp(-pow((f - f2) / 280, 2)) + 0.05
+                        value += gain / pow(harmonic, 0.7) * sin(harmonic * phase)
+                        harmonic += 1
+                    }
+                    let index = Double(written)
+                    let edges = min(1, index / fade, Double(total - written) / fade)
+                    let syllableShape = 0.62 + 0.38 * sin(.pi * t)
+                    samples.append(Float(value * edges * syllableShape * part.loudness))
+                    written += 1
+                }
+            }
+            phrase = []
+            samples.append(contentsOf: repeatElement(0, count: Int(pause * rate)))
+        }
 
         for (position, syllable) in syllables.enumerated() {
             let progress = syllables.count > 1 ? Double(position) / Double(syllables.count - 1) : 0
-            // a gentle fall over the sentence, plus a random wobble per blip
-            var f0 = base * (1.04 - 0.08 * progress) * (1 + (generator.unit() - 0.5) * 0.16)
-            var glide = (generator.unit() - 0.5) * 0.10
-            if syllable.rising { f0 *= 1.22; glide = 0.28 }
-            let duration = length * (syllable.closed ? 0.85 : 1) * (0.9 + generator.unit() * 0.2) * (syllable.rising ? 1.5 : 1)
-            let loudness = syllable.loud ? 1.0 : 0.7 + generator.unit() * 0.2
-            blips.append((Double(samples.count) / rate, loudness))
-
-            let (f1, f2) = formants[syllable.vowel]!
-            let count = Int(duration * rate)
-            let attack = 0.004 * rate
-            var phase = 0.0
-            var blip = [Float](repeating: 0, count: count)
-            var peak: Float = 0.0001
-            for n in 0..<count {
-                let t = Double(n) / Double(count)
-                let frequency = f0 * (1 + glide * t)
-                phase += 2 * .pi * frequency / rate
-                var value = 0.0
-                var harmonic = 1.0
-                while harmonic * frequency < 5000 && harmonic <= 14 {
-                    let f = harmonic * frequency
-                    let gain = exp(-pow((f - f1) / 180, 2)) + 0.65 * exp(-pow((f - f2) / 260, 2)) + 0.06
-                    value += gain / pow(harmonic, 0.6) * sin(harmonic * phase)
-                    harmonic += 1
-                }
-                let envelope = min(1, Double(n) / attack) * pow(1 - t, 1.6)
-                blip[n] = Float(value * envelope)
-                peak = max(peak, abs(blip[n]))
-            }
-            let scale = Float(0.34 * loudness) / peak
-            samples.append(contentsOf: blip.map { $0 * scale })
-            let gap = 0.014 + syllable.pause
-            samples.append(contentsOf: repeatElement(0, count: Int(gap * rate)))
+            // a gentle fall over the sentence and only a slight wobble, so it sounds like talking
+            var f0 = base * (1.03 - 0.07 * progress) * (1 + (generator.unit() - 0.5) * 0.06)
+            var glide = 0.0
+            if syllable.rising { f0 *= 1.12; glide = 0.18 }
+            let duration = length * (syllable.closed ? 0.9 : 1) * (0.95 + generator.unit() * 0.1)
+                * (syllable.rising ? 1.4 : 1) + min(syllable.pause, 0.06) * 0.5
+            let loudness = syllable.loud ? 1.0 : 0.85
+            phrase.append((syllable, f0, glide, Int(duration * rate), loudness))
+            // spaces only stretch the syllable a touch; punctuation is a real breath
+            if syllable.pause >= 0.1 { flush(pause: syllable.pause) }
         }
-        return Speech(samples: samples, blips: blips)
+        flush(pause: 0)
+
+        let peak = samples.reduce(Float(0.0001)) { max($0, abs($1)) }
+        let scale = 0.32 / peak
+        return Speech(samples: samples.map { $0 * scale }, blips: blips)
     }
 }
 
