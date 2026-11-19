@@ -2,7 +2,7 @@ import Foundation
 import AVFoundation
 
 /// How the 모리들 talk out loud: not a reading voice but a soft, cute murmur that sounds like talking. Every syllable of the reply
-/// gets its vowel color (ㅏ bright, ㅜ round, ㅣ thin…) and a hint of its consonant (ㅅ hiss, ㄱ click, ㅁ hum), and the syllables flow into each other
+/// gets its vowel color (ㅏ bright, ㅜ round, ㅣ thin…) and a hint of its consonant (ㅅ a soft breath, ㄱ a little dip, ㅁ a hum), and the syllables flow into each other
 /// in one smooth voice, pausing only at punctuation. Each 모리 has its own pitch, so they all sound different.
 /// Everything is synthesized here; there are no sound files.
 @MainActor
@@ -66,9 +66,9 @@ final class Babbler {
     /// The consonant a syllable starts with, as a sound shape: what makes it sound like talking.
     enum Onset: Equatable {
         case none
-        /// ㄱ ㄷ ㅂ ㅋ ㅌ ㅍ…: a tiny stop, then a soft click.
+        /// ㄱ ㄷ ㅂ ㅋ ㅌ ㅍ…: the voice dips and comes back.
         case stop
-        /// ㅅ ㅈ ㅊ…: a short hiss before the vowel.
+        /// ㅅ ㅈ ㅊ…: a soft breath before the vowel.
         case hiss
         /// ㅎ: a breath.
         case breath
@@ -203,7 +203,7 @@ final class Babbler {
             var (f1, f2) = formants[first.syllable.vowel]!
             var phase = 0.0
             var vibrato = 0.0
-            var previousNoise = 0.0
+            var softNoise = 0.0
             var written = 0
             for (position, part) in phrase.enumerated() {
                 blips.append((Double(samples.count) / rate, part.loudness))
@@ -239,22 +239,21 @@ final class Babbler {
                     }
 
                     // the consonant: how loud the voice is and how much breath/hiss is mixed in
-                    let white = noise.unit() * 2 - 1
-                    let bright = white - previousNoise   // crude high-pass for a hiss
-                    previousNoise = white
+                    // breath is low-passed noise: a soft "hh", never a sharp hiss or click
+                    softNoise += (noise.unit() * 2 - 1 - softNoise) * 0.08
+                    let breath = softNoise * 3
                     var voiceLevel = 1.0
-                    var air = 0.025 * white              // a touch of breath always, for a soft voice
+                    var air = 0.0
                     let onsetT = Double(n) / onsetLength
                     switch inOnset ? part.syllable.onset : Onset.none {
                     case .stop:
-                        voiceLevel = onsetT < 0.45 ? 0.08 : 0.08 + 0.92 * (onsetT - 0.45) / 0.55
-                        if onsetT >= 0.45 && onsetT < 0.62 { air += 0.35 * bright }
+                        voiceLevel = 0.35 + 0.65 * pow(onsetT, 1.5)
                     case .hiss:
-                        voiceLevel = 0.12 + 0.88 * pow(onsetT, 2)
-                        air += 0.30 * bright * (1 - onsetT)
+                        voiceLevel = 0.45 + 0.55 * onsetT
+                        air += 0.05 * breath * (1 - onsetT)
                     case .breath:
                         voiceLevel = 0.35 + 0.65 * onsetT
-                        air += 0.18 * white * (1 - onsetT)
+                        air += 0.06 * breath * (1 - onsetT)
                     case .nasal:
                         voiceLevel = 0.65 + 0.35 * onsetT
                     case .liquid:
@@ -267,7 +266,7 @@ final class Babbler {
                     let index = Double(written)
                     let edges = min(1, index / fade, Double(total - written) / fade)
                     let syllableShape = 0.7 + 0.3 * sin(.pi * t)
-                    samples.append(Float((voice * voiceLevel * 0.9 + air * 3) * edges * syllableShape * part.loudness))
+                    samples.append(Float((voice * voiceLevel * 0.9 + air) * edges * syllableShape * part.loudness))
                     written += 1
                 }
             }
