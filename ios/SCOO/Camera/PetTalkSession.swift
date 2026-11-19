@@ -3,8 +3,8 @@ import AVFoundation
 import Speech
 
 /// Voice talk mode (음성 대화, 티키타카): listens with on-device speech recognition, asks the server (or the
-/// built-in lines) for a short reply, says it out loud, then listens again. `level` (0...1) drives the
-/// equalizer around the frame: the microphone while listening, the friend's voice while speaking.
+/// built-in lines) for a short reply, babbles it out loud (`Babbler`), then listens again. `level` (0...1) drives the
+/// glow around the frame: the microphone while listening, the friend's voice while speaking.
 @MainActor
 final class PetTalkSession: NSObject, ObservableObject {
     enum Phase: Equatable { case off, starting, listening, thinking, speaking }
@@ -33,7 +33,7 @@ final class PetTalkSession: NSObject, ObservableObject {
     private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "ko-KR"))
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var recognition: SFSpeechRecognitionTask?
-    private let synthesizer = AVSpeechSynthesizer()
+    private let babbler = Babbler()
     private var silenceTask: Task<Void, Never>?
     private var idleTask: Task<Void, Never>?
     private var decayTask: Task<Void, Never>?
@@ -47,11 +47,6 @@ final class PetTalkSession: NSObject, ObservableObject {
     nonisolated static let idleLimit: Duration = .seconds(30)
     /// Wait this long for the server before falling back to the built-in lines.
     nonisolated static let serverWait: Duration = .seconds(6)
-
-    override init() {
-        super.init()
-        synthesizer.delegate = self
-    }
 
     // MARK: On and off
 
@@ -94,7 +89,7 @@ final class PetTalkSession: NSObject, ObservableObject {
         phase = .off
         turn += 1
         stopListening()
-        synthesizer.stopSpeaking(at: .immediate)
+        babbler.stop()
         silenceTask?.cancel(); idleTask?.cancel(); decayTask?.cancel()
         level = 0
         heard = ""
@@ -272,12 +267,9 @@ final class PetTalkSession: NSObject, ObservableObject {
         reply = answer.text
         mood = answer.mood
         phase = .speaking
-        let utterance = AVSpeechUtterance(string: answer.text)
-        utterance.voice = AVSpeechSynthesisVoice(language: "ko-KR")
-        utterance.pitchMultiplier = pet.pitch
-        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 1.02
-        utterance.preUtteranceDelay = 0.05
-        synthesizer.speak(utterance)
+        babbler.say(answer.text, pitch: pet.pitch,
+                    beat: { [weak self] loudness in self?.spokeWord(loudness) },
+                    done: { [weak self] in self?.doneSpeaking() })
         decayTask?.cancel()
         decayTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -288,9 +280,9 @@ final class PetTalkSession: NSObject, ObservableObject {
         }
     }
 
-    private func spokeWord() {
+    private func spokeWord(_ loudness: Double) {
         guard phase == .speaking else { return }
-        level = Double.random(in: 0.55...0.95)
+        level = loudness
     }
 
     private func doneSpeaking() {
@@ -303,16 +295,5 @@ final class PetTalkSession: NSObject, ObservableObject {
             guard let self, current == self.turn, self.phase == .speaking else { return }
             self.listen()
         }
-    }
-}
-
-extension PetTalkSession: AVSpeechSynthesizerDelegate {
-    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, willSpeakRangeOfSpeechString characterRange: NSRange,
-                                       utterance: AVSpeechUtterance) {
-        Task { @MainActor in self.spokeWord() }
-    }
-
-    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        Task { @MainActor in self.doneSpeaking() }
     }
 }
