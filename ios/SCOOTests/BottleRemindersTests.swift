@@ -34,8 +34,8 @@ final class BottleRemindersTests: XCTestCase {
     }
 
     func testLettersAlreadyReadAreNotScheduledAgain() {
-        // arrived three days ago: the first two letters (6 h, 2 d 6 h) are past
-        let sent = bottle(.outgoing, arrives: -3 * 24 * 3600, news: true)
+        // arrived four days ago: the first two letters (6 h, 3 d 6 h) are past
+        let sent = bottle(.outgoing, arrives: -4 * 24 * 3600, news: true)
         XCTAssertEqual(BottleReminders.plan([sent], now: now, fast: false).count, BottleRules.maxLetters - 2)
         XCTAssertTrue(BottleReminders.plan([bottle(.outgoing, arrives: 600)], now: now, fast: false).isEmpty, "no news asked")
     }
@@ -46,7 +46,7 @@ final class BottleRemindersTests: XCTestCase {
     }
 
     func testLettersReadInTheAppMatchTheSchedule() {
-        let sent = bottle(.outgoing, arrives: -3 * 24 * 3600, news: true)
+        let sent = bottle(.outgoing, arrives: -4 * 24 * 3600, news: true)
         XCTAssertEqual(BottleRules.letters(for: [sent], now: now, fast: false).count, 2)
     }
 
@@ -59,5 +59,11 @@ final class BottleRemindersTests: XCTestCase {
         var settled = waiting
         settled.settled = true
         XCTAssertTrue(BottleReminders.plan([settled], now: now, fast: false).isEmpty)
+    }
+
+    func testWithRealPeopleOnlyTheFirstLetterIsAnnouncedAhead() {
+        let sent = bottle(.outgoing, arrives: 600, news: true)
+        let plan = BottleReminders.plan([sent], now: now, fast: false, real: true)
+        XCTAssertEqual(plan.map(\.date), [BottleRules.letterDate(sent, index: 0, fast: false)])
     }
 }

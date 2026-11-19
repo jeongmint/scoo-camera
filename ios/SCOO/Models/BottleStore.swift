@@ -37,7 +37,7 @@ enum BottleGift: Identifiable, Equatable {
 final class BottleStore: ObservableObject {
     @Published private(set) var bottles: [Bottle] = [] {
         // Keep the phone's own arrival and letter notifications in step with the bottles.
-        didSet { if bottles != oldValue { let current = bottles; Task { await LocalNotifier.reschedule(current) } } }
+        didSet { if bottles != oldValue { let current = bottles, real = backend.isOnline; Task { await LocalNotifier.reschedule(current, real: real) } } }
     }
     @Published var message: String?
     @Published private(set) var busy = false
@@ -100,10 +100,10 @@ final class BottleStore: ObservableObject {
 
     private func askForNotifications() {
         // The first bottle is the moment to ask: "tell me when it arrives / when the baby writes".
-        let current = bottles
+        let current = bottles, real = backend.isOnline
         Task {
             await LocalNotifier.askIfNeeded()
-            await LocalNotifier.reschedule(current)
+            await LocalNotifier.reschedule(current, real: real)
         }
     }
 

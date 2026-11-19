@@ -38,6 +38,24 @@ enum LetterWords {
         return word + ((last.value - 0xAC00) % 28 == 0 ? "는" : "은")
     }
 
+    /// True when the last syllable has a final consonant (받침).
+    private static func hasFinal(_ word: String) -> Bool? {
+        guard let last = word.unicodeScalars.last, (0xAC00...0xD7A3).contains(last.value) else { return nil }
+        return (last.value - 0xAC00) % 28 != 0
+    }
+
+    /// "부여군이야" / "마포야".
+    static func withCopula(_ word: String) -> String {
+        guard let final = hasFinal(word) else { return word + "(이)야" }
+        return word + (final ? "이야" : "야")
+    }
+
+    /// "멜론이라는" / "도도라는".
+    static func withQuote(_ word: String) -> String {
+        guard let final = hasFinal(word) else { return word + "(이)라는" }
+        return word + (final ? "이라는" : "라는")
+    }
+
     /// A letter line built around what the new family photographed.
     static func line(word: String, index: Int) -> String {
         switch index % 3 {

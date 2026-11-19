@@ -16,7 +16,7 @@ enum LocalNotifier {
     }
 
     /// Replaces every scheduled bottle notification with the current plan.
-    static func reschedule(_ bottles: [Bottle], now: Date = Date()) async {
+    static func reschedule(_ bottles: [Bottle], real: Bool = false, now: Date = Date()) async {
         let center = UNUserNotificationCenter.current()
         let pending = await center.pendingNotificationRequests().map(\.identifier).filter { $0.hasPrefix(BottleReminders.prefix) }
         center.removePendingNotificationRequests(withIdentifiers: pending)
@@ -24,7 +24,7 @@ enum LocalNotifier {
         let status = await center.notificationSettings().authorizationStatus
         guard status == .authorized || status == .provisional else { return }
         let fast = UserDefaults.standard.bool(forKey: "bottleFastMode")
-        for reminder in BottleReminders.plan(bottles, now: now, fast: fast) {
+        for reminder in BottleReminders.plan(bottles, now: now, fast: fast, real: real) {
             let content = UNMutableNotificationContent()
             content.title = reminder.title
             content.body = reminder.body

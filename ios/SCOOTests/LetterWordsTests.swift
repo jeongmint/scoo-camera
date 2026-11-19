@@ -41,7 +41,7 @@ final class LetterWordsTests: XCTestCase {
             BottleMoment(bottleID: bottle.id, subject: "dog", date: first.addingTimeInterval(60)),
         ]
         let text = BottleRules.letters(for: [bottle], now: first, fast: false, moments: moments)[0].text
-        XCTAssertEqual(text, BottleRules.letterText(bottle, index: 0), "no word yet: the usual line")
+        XCTAssertEqual(text, BottleRules.realArrival, "no word yet: only that the baby arrived")
     }
 
     func testSimulatedSeaIsStable() {
@@ -50,5 +50,34 @@ final class LetterWordsTests: XCTestCase {
         let once = BottleRules.letters(for: [bottle], now: later, fast: false).map(\.text)
         XCTAssertEqual(once, BottleRules.letters(for: [bottle], now: later, fast: false).map(\.text))
         XCTAssertEqual(once.count, BottleRules.maxLetters)
+    }
+
+    func testCopulaAndQuoteFollowTheLastSyllable() {
+        XCTAssertEqual(LetterWords.withCopula("충남 부여군"), "충남 부여군이야")
+        XCTAssertEqual(LetterWords.withCopula("세종"), "세종이야")
+        XCTAssertEqual(LetterWords.withCopula("서울 마포구"), "서울 마포구야")
+        XCTAssertEqual(LetterWords.withQuote("멜로"), "멜로라는")
+        XCTAssertEqual(LetterWords.withQuote("시나몬"), "시나몬이라는")
+    }
+
+    func testRealPeopleNeverGetMadeUpPlacesOrExtraLetters() {
+        let bottle = sent()
+        let later = BottleRules.letterDate(bottle, index: 5, fast: false)
+        let second = BottleRules.letterDate(bottle, index: 1, fast: false)
+        let moments = [BottleMoment(bottleID: bottle.id, subject: "flower", date: second.addingTimeInterval(-60))]
+        let letters = BottleRules.letters(for: [bottle], now: later, fast: false, moments: moments)
+        XCTAssertEqual(letters.count, 2, "도착 편지 하나와 꽃 사진이 있던 날의 편지 하나만")
+        XCTAssertEqual(letters.last?.text, BottleRules.realArrival)
+        XCTAssertTrue(letters[0].text.contains("꽃"))
+        XCTAssertTrue(BottleRules.letters(for: [bottle], now: later, fast: false, moments: []).count == 1)
+    }
+
+    func testSimulatedLettersSpeakProperly() {
+        for _ in 0..<50 {
+            let text = BottleRules.letterText(sent(), index: 0)
+            let place = text.replacingOccurrences(of: "잘 도착했어! 여기는 ", with: "").components(separatedBy: ".")[0]
+            let stem = String(place.dropLast(place.hasSuffix("이야") ? 2 : 1))
+            XCTAssertEqual(LetterWords.withCopula(stem), place)
+        }
     }
 }
