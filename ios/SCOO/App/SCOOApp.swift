@@ -17,6 +17,7 @@ struct SCOOApp: App {
                 .preferredColorScheme(.light)
                 .task {
                     await garden.load()
+                    await OperatorMode.refresh()
                     // Reschedule bottle notifications at launch (loading the bottles does it). Online, only for an
                     // account that already exists: launching the app must not create one.
                     let bottles = BottleStore.preferred()

@@ -105,7 +105,7 @@ struct BreedScreen: View {
     @ViewBuilder
     private var picker: some View {
         if available.count < 2 {
-            Text("교배하려면 친구가 두 명 이상 있어야 해요. 지금은 \(owned.map(\.name).joined(separator: ", ")). 유리병 입양으로 친구를 하나 띄우면 다음 날 새 친구가 와요. 설정 > 동네 친구(테스트)의 ‘모든 친구 열기’로 전부 시험해 볼 수도 있어요.")
+            Text("교배하려면 친구가 두 명 이상 있어야 해요. 지금은 \(owned.map(\.name).joined(separator: ", ")). 유리병 입양으로 친구를 하나 띄우면 다음 날 새 친구가 와요.")
                 .font(.footnote).foregroundStyle(.secondary)
                 .padding(16).background(.white.opacity(0.6), in: RoundedRectangle(cornerRadius: 14))
         } else {

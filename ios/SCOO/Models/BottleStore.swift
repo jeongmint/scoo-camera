@@ -54,10 +54,9 @@ final class BottleStore: ObservableObject {
         self.init(backend: LocalBottleBackend(directory: directory, ocean: ocean, luck: luck))
     }
 
-    /// The server when it is configured and the user wants real people, otherwise the simulated sea.
+    /// Real people through the server. The simulated sea is only for builds without server keys (and tests).
     static func preferred() -> BottleStore {
-        let online = UserDefaults.standard.object(forKey: "bottleOnline") as? Bool ?? true
-        if online && SupabaseConfig.isConfigured { return BottleStore(backend: SupabaseBottleBackend()) }
+        if SupabaseConfig.isConfigured { return BottleStore(backend: SupabaseBottleBackend()) }
         return BottleStore()
     }
 

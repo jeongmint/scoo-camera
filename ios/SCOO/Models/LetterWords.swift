@@ -71,7 +71,6 @@ enum LetterWords {
         let defaults = UserDefaults.standard
         guard !subjects.isEmpty,
               defaults.object(forKey: "shareMoments") as? Bool ?? true,
-              defaults.object(forKey: "bottleOnline") as? Bool ?? true,
               SupabaseConfig.isConfigured,
               await SupabaseClient.shared.currentUserID != nil else { return }
         _ = try? await SupabaseClient.shared.rpc("share_moment", ["p_subjects": subjects], as: Int.self)

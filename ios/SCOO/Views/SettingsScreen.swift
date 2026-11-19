@@ -11,7 +11,7 @@ struct SettingsScreen: View {
     @AppStorage("unlockAllFriends") private var unlockAll = false
     @AppStorage("savePlace") private var savePlace = true
     @AppStorage("bottleFastMode") private var bottleFast = false
-    @AppStorage("bottleOnline") private var bottleOnline = true
+    @AppStorage(OperatorMode.key) private var operatorOn = false
     @AppStorage("talkOnline") private var talkOnline = true
     @AppStorage("localAlerts") private var localAlerts = true
     @AppStorage("shareMoments") private var shareMoments = true
@@ -44,7 +44,7 @@ struct SettingsScreen: View {
                 Section {
                     row("카메라", icon: "camera.fill", color: Glass.moss, value: dateStamp ? "날짜 인쇄" : "") { cameraPage }
                     if SupabaseConfig.isConfigured {
-                        row("유리병 · 편지", icon: "envelope.fill", color: Glass.sea, value: bottleOnline ? "진짜 사람들" : "가짜 바다") { bottlePage }
+                        row("유리병 · 편지", icon: "envelope.fill", color: Glass.sea, value: shareMoments ? "사진 주제 보냄" : "") { bottlePage }
                     }
                     row("대화", icon: "bubble.left.fill", color: Glass.amber, value: replyLabel) { talkPage }
                     row("알림", icon: "bell.fill", color: Glass.clay, value: localAlerts ? "켬" : "끔") { alertsPage }
@@ -54,9 +54,11 @@ struct SettingsScreen: View {
                     row("개인정보 처리방침", icon: "lock.fill", color: Glass.stone) { PrivacyScreen() }
                     Button("iPhone 설정 열기") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
                 }.listRowBackground(Glass.row)
-                Section {
-                    row("테스트 도구", icon: "testtube.2", color: Glass.stone.opacity(0.6)) { testTools }
-                }.listRowBackground(Glass.row)
+                if operatorOn {
+                    Section {
+                        row("운영자 모드", icon: "testtube.2", color: Glass.stone.opacity(0.6)) { testTools }
+                    }.listRowBackground(Glass.row)
+                }
                 Section { HStack { Text("SCOO").font(.headline); Spacer(); Text("0.2 · Eternal").font(.caption2).foregroundStyle(.secondary) } }.listRowBackground(Color.clear)
             }.glassSheet()
                 .navigationTitle("작은 설정").navigationBarTitleDisplayMode(.inline)
@@ -104,9 +106,6 @@ struct SettingsScreen: View {
     private var bottlePage: some View {
         page("유리병 · 편지") {
             Section {
-                Toggle("진짜 사람들과 주고받기", isOn: $bottleOnline)
-            } footer: { Text("끄면 유리병은 이 iPhone 안의 가짜 바다로 돌아가요.") }.listRowBackground(Glass.row)
-            Section {
                 Toggle("아기 편지에 사진 주제 넣기", isOn: $shareMoments)
             } footer: { Text("입양한 아기가 처음 편지를 쓸 때 ‘하늘·고양이·꽃’ 같은 정해진 단어만 들어가요. 사진은 보내지 않아요.") }.listRowBackground(Glass.row)
         }
@@ -137,7 +136,7 @@ struct SettingsScreen: View {
                 Section("대화 모드") {
                     Text("카메라 위쪽 말풍선을 누르면 떠 있는 친구와 목소리로 이야기해요. 목소리는 iPhone에서 글자로 바뀌고, 녹음은 남기지 않아요. ‘AI로 대화하기’를 켜면 Apple Intelligence가 되는 iPhone은 기기 안 AI가 대답해서 아무것도 밖으로 나가지 않아요. 그 밖의 iPhone에서는 그 글자만 서버를 거쳐 AI로 보내 대답을 만들고, 대화 내용은 저장하지 않아요. 끄면 앱 안의 간단한 대답만 해요.")
                     Text("유리병·편지 알림은 이 iPhone이 스스로 맞춰 두는 알림이라 서버를 거치지 않아요.")
-                    Text("유리병을 끄면 기기 안의 가짜 바다로 돌아가요. 입양한 아기가 처음 가족에게 편지를 쓸 때, 내가 찍은 사진의 주제 단어(하늘·고양이·꽃 같은 정해진 단어)만 들어가요.")
+                    Text("유리병은 모르는 사람끼리 이름 없이 오가요. 입양한 아기가 처음 가족에게 편지를 쓸 때, 내가 찍은 사진의 주제 단어(하늘·고양이·꽃 같은 정해진 단어)만 들어가요.")
                 }.listRowBackground(Glass.row).font(.footnote)
                 Section("Eternal") {
                     Text("차가운 회색 그림자와 따뜻한 빛, 짙은 검정과 작은 디지털 입자. 필터는 Eternal 하나만 사용해요.").font(.footnote)
@@ -180,11 +179,11 @@ struct SettingsScreen: View {
                     Toggle("유리병 빠르게 (1분 배송 테스트)", isOn: $bottleFast)
                     if let note { Text(note).font(.footnote) }
                 } header: { Text("동네 친구") } footer: {
-                    Text("처음엔 지금 있는 시군구의 다섯 친구 중 한 마리만 와요. 더 많은 친구는 하루 한 번 유리병 입양으로 만나요. 다시 받으면 첫 친구만 바뀌고 사진과 성장 기록, 다른 친구는 그대로예요. ‘모든 친구 열기’를 켜면 교배 화면에서 \(Species.all.count)종을 모두 고를 수 있어요.")
+                    Text("처음엔 지금 있는 시군구의 다섯 친구 중 한 마리만 와요. 더 많은 친구는 하루 한 번 유리병 입양으로 만나요. 다시 받으면 첫 친구만 바뀌고 사진과 성장 기록, 다른 친구는 그대로예요. ‘모든 친구 열기’를 켜면 교배 화면에서 \(Species.all.count)종을 모두 고를 수 있어요. 운영자 계정에만 보이고, 1분 배송과 하루 여러 번 띄우기는 서버도 운영자에게만 허락해요.")
                 }.listRowBackground(Glass.row)
         }
         .glassSheet()
-        .navigationTitle("테스트 도구").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle("운영자 모드").navigationBarTitleDisplayMode(.inline)
     }
 
     private func updateAlerts(_ on: Bool) async {
@@ -200,6 +199,7 @@ struct SettingsScreen: View {
         anonymous = await client.isAnonymous
         email = await client.email
         provider = await client.provider
+        await OperatorMode.refresh()
     }
 
     private var friendsLabel: String {
