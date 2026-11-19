@@ -9,7 +9,7 @@ struct TalkPet: Equatable {
     var personality: String
     /// Frame glow color, 0...1 sRGB.
     var tint: (red: Double, green: Double, blue: Double)
-    /// AVSpeechUtterance pitch multiplier (0.5...2).
+    /// Voice pitch for the babble (about 1...1.5; higher is a smaller, squeakier voice).
     var pitch: Float
 
     static func == (lhs: TalkPet, rhs: TalkPet) -> Bool {
