@@ -208,6 +208,7 @@ struct GardenScreen: View {
                     .buttonStyle(.plain)
                     .disabled(todayPhotos.isEmpty)
                     VStack(spacing: 10) {
+                        NavigationLink { FriendBoxScreen() } label: { menuRow("친구 상자 (레벨·성장)", systemImage: "shippingbox") }
                         NavigationLink { CollectionScreen() } label: { menuRow("친구 도감", systemImage: "square.grid.3x3") }
                         NavigationLink { BreedScreen() } label: { menuRow("교배하러 가기", systemImage: "heart.circle") }
                         NavigationLink { BottleScreen() } label: { menuRow("유리병 입양", systemImage: "water.waves") }

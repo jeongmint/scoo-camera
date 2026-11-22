@@ -16,8 +16,15 @@ struct BreedScreen: View {
 
     private enum Slot { case a, b }
 
+    /// Friends in bloom (`FriendGrowth.bloomLevel`); 운영자 모드의 ‘모든 친구 열기’ opens everyone.
     private var owned: [Species] {
-        Species.owned(friends.species, unlockAll: unlockAll)
+        Species.owned(friends.bloomed, unlockAll: unlockAll)
+    }
+    /// Friends still growing, with how far they are from bloom.
+    private var growingNote: String {
+        friends.friends.filter { $0.stage != .bloom }.compactMap { friend in
+            friend.character.map { "\($0.name) LV.\(friend.growth.level)" }
+        }.joined(separator: ", ")
     }
     /// Species plus babies in bloom (재교배).
     private var available: [BreedParent] { BreedRules.parents(species: owned, breeds: store.breeds, moments: moments) }
@@ -105,7 +112,7 @@ struct BreedScreen: View {
     @ViewBuilder
     private var picker: some View {
         if available.count < 2 {
-            Text("교배하려면 친구가 두 명 이상 있어야 해요. 지금은 \(owned.map(\.name).joined(separator: ", ")). 유리병 입양으로 친구를 하나 띄우면 다음 날 새 친구가 와요.")
+            Text("교배하려면 활짝 만개한(레벨 \(FriendGrowth.bloomLevel)) 친구가 둘 이상 있어야 해요. 지금 만개한 친구: \(owned.isEmpty ? "아직 없음" : owned.map(\.name).joined(separator: ", ")). \(growingNote.isEmpty ? "" : "자라는 중: \(growingNote). ")친구를 카메라에 띄워 두고 함께 찍으면 그 친구가 자라요.")
                 .font(.footnote).foregroundStyle(.secondary)
                 .padding(16).background(.white.opacity(0.6), in: RoundedRectangle(cornerRadius: 14))
         } else {

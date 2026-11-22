@@ -29,8 +29,9 @@ actor PhotoRepository {
 
     /// `extra` is bonus EXP on top of the usual reward (e.g. 오늘의 미션).
     /// `video` is a finished clip to keep with this moment; it is moved into the garden folder.
+    /// `friend`: the floating character that gets this EXP; nil = 기본 모리 (the garden's own EXP).
     func add(_ processed: ProcessedPhoto, filter: FilmLook, mode: CaptureMode, location: PhotoLocation? = nil, extra: Int = 0,
-             video: URL? = nil) throws -> GardenSnapshot {
+             video: URL? = nil, friend: String? = nil) throws -> GardenSnapshot {
         var next = try load()
         let id = UUID()
         let filename = "\(id.uuidString).jpg"
@@ -39,7 +40,7 @@ actor PhotoRepository {
         let photo = PhotoRecord(id: id, date: Date(), filename: filename, filter: filter.rawValue,
                                 isFood: processed.isFood, mode: mode, experience: gain,
                                 bonus: processed.bonus, classificationNote: processed.classificationNote, location: location,
-                                videoFilename: videoFilename)
+                                videoFilename: videoFilename, friend: friend)
         let url = Self.directory.appendingPathComponent(filename)
         try processed.jpeg.write(to: url, options: .atomic)
         if let video, let videoFilename {
@@ -47,7 +48,7 @@ actor PhotoRepository {
             catch { try? FileManager.default.removeItem(at: url); throw error }
         }
         next.photos.insert(photo, at: 0)
-        next.experience += gain
+        if friend == nil { next.experience += gain }
         next.moments += 1
         do { try persist(next) }
         catch {
@@ -94,12 +95,16 @@ final class GardenStore: ObservableObject {
     }
 
     @discardableResult
+    /// `friend`: the floating character (its own EXP grows); nil = 기본 모리. Returns the EXP gained.
     func add(_ photo: ProcessedPhoto, filter: FilmLook, mode: CaptureMode, location: PhotoLocation? = nil, extra: Int = 0,
-             video: URL? = nil) async throws -> Int {
-        let previous = snapshot.experience
-        snapshot = try await repository.add(photo, filter: filter, mode: mode, location: location, extra: extra, video: video)
+             video: URL? = nil, friend: String? = nil) async throws -> Int {
+        let grower = friend.flatMap { FriendStore.shared.owns($0) ? $0 : nil }
+        snapshot = try await repository.add(photo, filter: filter, mode: mode, location: location, extra: extra, video: video,
+                                            friend: grower)
+        let gain = snapshot.photos.first?.experience ?? 0
+        if let grower { FriendStore.shared.gain(gain, species: grower) }
         WidgetBridge.publish(snapshot)
-        return snapshot.experience - previous
+        return gain
     }
 
     func rename(_ name: String) async {
