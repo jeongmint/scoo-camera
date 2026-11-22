@@ -319,7 +319,8 @@ private struct Egg: View {
 
 // MARK: - Detail
 
-private struct BreedDetail: View {
+/// One bred baby up close (also opened from 친구 상자).
+struct BreedDetail: View {
     let breed: Breed
     let moments: Int
     @Environment(\.dismiss) private var dismiss
