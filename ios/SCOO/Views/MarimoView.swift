@@ -152,6 +152,13 @@ struct GardenScreen: View {
         guard let picked = Species.find(companionRaw), FriendStore.shared.owns(picked.id) else { return nil }
         return picked
     }
+    /// The floating one's name: a friend, a bred baby, or nil for Mori.
+    private var floatingName: String? {
+        guard let id = Floater.babyID(companionRaw) else { return floatingFriend?.name }
+        let babies = BreedStore()
+        babies.load()
+        return babies.breeds.first { $0.id == id }.map { "아기 \($0.title)" }
+    }
 
     var body: some View {
         NavigationStack {
@@ -246,7 +253,7 @@ struct GardenScreen: View {
             return
         }
         do {
-            try WalkMode.start(heroName: floatingFriend?.name ?? garden.snapshot.name, district: nil)
+            try WalkMode.start(heroName: floatingName ?? garden.snapshot.name, district: nil)
             walking = true
             WidgetBridge.refresh()
             // Fill in the district once it is known.
@@ -266,7 +273,7 @@ struct GardenScreen: View {
         guard !images.isEmpty else { return }
         let friend = floatingFriend
         let strip = FilmStrip(photos: images, date: Date(),
-                              caption: FilmStrip.caption(friend: friend?.name ?? garden.snapshot.name, photos: Array(records.prefix(4))),
+                              caption: FilmStrip.caption(friend: floatingName ?? garden.snapshot.name, photos: Array(records.prefix(4))),
                               friendAsset: friend?.assetName)
         let renderer = ImageRenderer(content: strip)
         renderer.scale = 2

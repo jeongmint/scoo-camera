@@ -2,7 +2,7 @@ import SwiftUI
 
 /// 친구 상자: every friend this user has, each with its own level, EXP and growth stage, and the bred babies.
 /// A friend grows from photos taken while it floats on the camera; 기본 모리 keeps the garden's own EXP.
-/// Babies grow with the photos taken after they hatched.
+/// Babies grow the same way, from photos taken while they float.
 struct FriendBoxScreen: View {
     @EnvironmentObject private var garden: GardenStore
     @ObservedObject private var friends = FriendStore.shared
@@ -38,7 +38,7 @@ struct FriendBoxScreen: View {
                 if !breeds.breeds.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("우리 아기들").font(.subheadline.weight(.semibold))
-                        Text("태어난 뒤 찍은 사진 \(BreedRules.photosToGrowing)장에 성장기, \(BreedRules.photosToGrow)장에 만개해요. 만개한 아기는 다시 교배할 수 있어요.")
+                        Text("아기도 카메라에 띄워 두고 함께 찍어야 자라요. 레벨 \(FriendGrowth.growingLevel)에 성장기, \(FriendGrowth.bloomLevel)에 만개하고, 만개한 아기는 다시 교배할 수 있어요.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 12) {
@@ -60,7 +60,8 @@ struct FriendBoxScreen: View {
         .sheet(item: $baby) { item in
             BreedDetail(breed: item, moments: moments)
         }
-        .onAppear { breeds.load() }
+        .onAppear { breeds.freezeLegacy(moments: moments) }
+        .onChange(of: baby == nil) { _, closed in if closed { breeds.load() } }
     }
 
     /// 기본 모리: the one floating when no friend is picked, growing with the garden's EXP.
@@ -121,20 +122,28 @@ struct FriendBoxScreen: View {
 
     private func babyCell(_ item: Breed) -> some View {
         let stage = item.stage(moments: moments)
-        let photos = item.photosSinceBirth(moments: moments)
+        let growth = item.growth(moments: moments)
+        let floating = companionRaw == Floater.tag(item)
         return VStack(spacing: 4) {
-            BreedPortrait(breed: item, stage: stage).frame(height: 56)
+            ZStack(alignment: .topTrailing) {
+                BreedPortrait(breed: item, stage: stage).frame(height: 56)
+                Text("\(growth.level)")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.white)
+                    .frame(minWidth: 18, minHeight: 18)
+                    .background(stage == .bloom ? Palette.moss : Palette.sage, in: Circle())
+            }
             Text(item.title).font(.system(size: 10, weight: .medium)).lineLimit(1).minimumScaleFactor(0.6)
-            ProgressView(value: Double(min(photos, BreedRules.photosToGrow)), total: Double(BreedRules.photosToGrow))
-                .tint(Palette.sage).scaleEffect(y: 0.7)
-            Text(stage == .bloom ? "🌼 만개" : "\(stage.title) · \(item.photosLeft(moments: moments))장 남음")
+            ProgressView(value: Double(growth.progress), total: 100).tint(Palette.sage).scaleEffect(y: 0.7)
+            Text(stage == .bloom ? "🌼 만개" : stage.title)
                 .font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.7)
         }
         .padding(8)
         .frame(maxWidth: .infinity)
         .background(.white.opacity(0.7), in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Palette.moss.opacity(floating ? 0.7 : 0), lineWidth: 1.5))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("아기 \(item.title), \(stage.title)")
+        .accessibilityLabel("아기 \(item.title), 레벨 \(growth.level), \(stage.title)\(floating ? ", 지금 떠 있어요" : "")")
     }
 
     private func stat(_ title: String, _ value: String) -> some View {

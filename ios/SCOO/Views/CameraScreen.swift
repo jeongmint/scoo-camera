@@ -18,6 +18,8 @@ struct CameraScreen: View {
     @StateObject private var locator = DistrictLocator()
     @AppStorage("companion") private var companionRaw = ""
     @ObservedObject private var friends = FriendStore.shared
+    /// Bred babies, which can float too (and then grow by themselves).
+    @StateObject private var babies = BreedStore()
     /// Whether the floating friend is also drawn into the photo, or only floats on screen.
     @AppStorage("companionInPhoto") private var companionInPhoto = true
     /// Leave each photo's spot on the map guestbook.
@@ -64,16 +66,42 @@ struct CameraScreen: View {
     /// (that one plus any open event friend such as the snowman).
     /// The characters this user has; any of them can float in Mori's place.
     private var ownedCompanions: [Species] { friends.species }
-    /// The friend to shoot together with; nil means shooting alone.
-    private var companion: Species? { Species.find(companionRaw).flatMap { friends.owns($0.id) ? $0 : nil } }
-    /// The floating one's own EXP: the picked friend's, or 기본 모리's. Each friend grows by itself.
-    private var heroXP: Int { companion.flatMap { friends.friend(for: $0.id)?.xp } ?? garden.snapshot.experience }
+    /// Who floats in Mori's place: a friend or a bred baby; nil = 기본 모리 (also when the picked one left).
+    private var floater: Floater? { Floater.resolve(companionRaw, owns: { friends.owns($0) }, babies: babies.breeds) }
+    /// The floating friend, when it is a character (not a baby).
+    private var companion: Species? { floater?.species }
+    /// The floating one's own EXP: the picked friend's or baby's, or 기본 모리's. Everyone grows by themselves.
+    private var heroXP: Int {
+        switch floater {
+        case .friend(let species): return friends.friend(for: species.id)?.xp ?? 0
+        case .baby(let baby): return baby.xp(moments: garden.snapshot.moments)
+        case nil: return garden.snapshot.experience
+        }
+    }
     private var heroGrowth: Growth { GrowthRules.growth(for: heroXP) }
-    private var heroName: String { companion?.name ?? garden.snapshot.name }
+    private var heroName: String { floater?.name ?? garden.snapshot.name }
+    /// The floating one's picture for drawing into the photo (babies are rendered from their portrait).
+    private func sticker() -> UIImage? {
+        switch floater {
+        case .friend(let species): return UIImage(named: species.assetName)
+        case .baby(let baby):
+            let renderer = ImageRenderer(content: BreedPortrait(breed: baby, stage: baby.stage(moments: garden.snapshot.moments))
+                .frame(width: 600, height: 600))
+            renderer.scale = 1
+            return renderer.uiImage
+        case nil: return nil
+        }
+    }
+    /// Babies from before they grew by floating keep what they grew; then the list is fresh for the menu.
+    private func refreshBabies() {
+        if garden.ready { babies.freezeLegacy(moments: garden.snapshot.moments) } else { babies.load() }
+    }
     private var moriSize: CGFloat { min(105, 78 + CGFloat(sqrt(Double(max(0, heroXP)))) * 0.3) }
     /// Who answers in talk mode: the floating friend, with the personality grown from the photos.
     private var talkPet: TalkPet {
-        TalkPet.of(companion, moriName: garden.snapshot.name, personality: Personality.of(garden.snapshot.photos).title)
+        let personality = Personality.of(garden.snapshot.photos).title
+        if let baby = floater?.baby { return TalkPet.of(baby: baby, personality: personality) }
+        return TalkPet.of(companion, moriName: garden.snapshot.name, personality: personality)
     }
     /// While talking, the friend wears the face of what it says.
     private var face: MoriExpression { talk.phase == .speaking ? talk.mood : expression }
@@ -160,7 +188,7 @@ struct CameraScreen: View {
             guard !processing else { selectedItem = nil; return }
             processing = true
             closeEyes()
-            let capturedMode = mode, stamp = dateStamp, together = companionInPhoto ? companion : nil
+            let capturedMode = mode, stamp = dateStamp, together = companionInPhoto ? sticker() : nil
             Task {
                 do {
                     guard let data = try await item.loadTransferable(type: Data.self) else {
@@ -171,7 +199,7 @@ struct CameraScreen: View {
                     let spot = CompanionSpot(center: CGPoint(x: savedMoriX, y: savedMoriY), width: CompanionSpot.defaultWidth)
                     // Imported photos land on the map where they were taken, if they carry GPS.
                     let place = savePlace ? PhotoLocation.fromImageData(data) : nil
-                    await process(data, mode: capturedMode, stamp: stamp, aspect: nil, companion: together, spot: spot, place: place)
+                    await process(data, mode: capturedMode, stamp: stamp, aspect: nil, sticker: together, spot: spot, place: place)
                 } catch { processing = false; calmDown(); notify(error.localizedDescription) }
                 selectedItem = nil
             }
@@ -184,6 +212,9 @@ struct CameraScreen: View {
         .animation(.easeInOut(duration: 0.35), value: talk.isOn)
         .onChange(of: assignedRaw) { _, _ in WidgetBridge.refresh() }
         .onChange(of: companionRaw) { _, _ in WidgetBridge.refresh() }
+        .onAppear { refreshBabies() }
+        .onChange(of: garden.ready) { _, _ in refreshBabies() }
+        .onChange(of: sheet == nil) { _, closed in if closed { refreshBabies() } }
         .sheet(item: $newFriend) { meeting in NewFriendSheet(meeting: meeting) }
         .sheet(item: $sheet, onDismiss: {
             if scenePhase == .active && !importing { camera.start() }
@@ -278,6 +309,7 @@ struct CameraScreen: View {
                         Picker("떠 있는 친구", selection: $companionRaw) {
                             Text("기본 모리").tag("")
                             ForEach(ownedCompanions) { friend in Text(friend.menuTitle).tag(friend.id) }
+                            ForEach(babies.breeds) { baby in Text("아기 · \(baby.title)").tag(Floater.tag(baby)) }
                         }
                     }
                     Section {
@@ -285,7 +317,7 @@ struct CameraScreen: View {
                     } footer: {
                         Text("친구에게만 내 대략 위치가 보여요.")
                     }
-                    if companion != nil {
+                    if floater != nil {
                         Section {
                             Toggle("사진에 같이 찍기", isOn: $companionInPhoto)
                         } footer: {
@@ -294,8 +326,8 @@ struct CameraScreen: View {
                     }
                 } label: {
                     HStack(spacing: 5) {
-                        Text(companion.map { "\(mode.title) · \($0.name)" } ?? mode.title)
-                        if companion != nil && companionInPhoto {
+                        Text(floater.map { "\(mode.title) · \($0.name)" } ?? mode.title)
+                        if floater != nil && companionInPhoto {
                             Image(systemName: "camera.fill").font(.system(size: 8))
                         }
                         Image(systemName: "chevron.down").font(.system(size: 8))
@@ -303,7 +335,7 @@ struct CameraScreen: View {
                         .font(.system(size: 11, weight: .medium)).padding(.horizontal, 15).frame(height: 38)
                         .background(.black.opacity(0.25), in: Capsule())
                 }.disabled(blocked)
-                    .accessibilityLabel("촬영 모드, \(mode.title), \(companion.map { "\($0.name), " + (companionInPhoto ? "사진에 같이 찍기" : "화면에만") } ?? "기본 모리")")
+                    .accessibilityLabel("촬영 모드, \(mode.title), \(floater.map { "\($0.name), " + (companionInPhoto ? "사진에 같이 찍기" : "화면에만") } ?? "기본 모리")")
                 Spacer()
                 Button { camera.flip() } label: {
                     Image(systemName: "arrow.triangle.2.circlepath.camera").font(.system(size: 21)).frame(width: 48, height: 48)
@@ -388,7 +420,13 @@ struct CameraScreen: View {
         return ZStack {
             Group {
                 if let companion {
-                    FloatingFriend(assetName: companion.assetName, size: moriSize, expression: face, floats: !moving)
+                    FloatingFriend(size: moriSize, expression: face, floats: !moving) {
+                        Image(companion.assetName).resizable().scaledToFit()
+                    }
+                } else if let baby = floater?.baby {
+                    FloatingFriend(size: moriSize, expression: face, floats: !moving) {
+                        BreedPortrait(breed: baby, stage: baby.stage(moments: garden.snapshot.moments))
+                    }
                 } else {
                     MarimoView(size: moriSize, happy: processing || camera.isCapturing,
                                expression: face == .normal ? nil : face, floats: !moving)
@@ -422,7 +460,7 @@ struct CameraScreen: View {
         .animation(.spring(response: 0.25, dampingFraction: 0.7), value: moving)
         .gesture(press)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(companion?.name ?? garden.snapshot.name), 사진 촬영")
+        .accessibilityLabel("\(heroName), 사진 촬영")
         .accessibilityValue("레벨 \(heroGrowth.level)")
         .accessibilityHint("두 번 탭하면 촬영합니다. 화면에서 꾹 누르고 끌면 이동합니다.")
         .accessibilityAddTraits(.isButton)
@@ -445,7 +483,7 @@ struct CameraScreen: View {
         }
         processing = true
         closeEyes()
-        let capturedMode = mode, stamp = dateStamp, together = companionInPhoto ? companion : nil
+        let capturedMode = mode, stamp = dateStamp, together = companionInPhoto ? sticker() : nil
         // Look up where we are while the shutter works, so the photo does not wait for GPS.
         let placeLookup: Task<PhotoLocation?, Never>? = savePlace ? Task { await locator.quickLocation() } : nil
         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
@@ -453,7 +491,7 @@ struct CameraScreen: View {
             switch result {
             case .success(let data): Task {
                 let place = await placeLookup?.value
-                await process(data, mode: capturedMode, stamp: stamp, aspect: aspect, companion: together, spot: spot, place: place)
+                await process(data, mode: capturedMode, stamp: stamp, aspect: aspect, sticker: together, spot: spot, place: place)
             }
             case .failure(let error): processing = false; calmDown(); notify(error.localizedDescription)
             }
@@ -541,7 +579,8 @@ struct CameraScreen: View {
         let moment = ProcessedPhoto(jpeg: clip.poster, isFood: false, bonus: 0,
                                     classificationNote: "동영상 \(max(1, Int(clip.seconds.rounded())))초")
         do {
-            let gain = try await garden.add(moment, filter: look, mode: mode, location: place, video: clip.url, friend: companion?.id)
+            let gain = try await garden.add(moment, filter: look, mode: mode, location: place, video: clip.url, friend: floater?.tag)
+            babies.load()
             UINotificationFeedbackGenerator().notificationOccurred(.success)
             react(.smile)
             notify("움직이는 순간도 냠! · +\(gain) EXP")
@@ -594,18 +633,19 @@ struct CameraScreen: View {
         }
     }
 
-    private func process(_ data: Data, mode: CaptureMode, stamp: Bool, aspect: CGFloat?, companion: Species?, spot: CompanionSpot,
+    private func process(_ data: Data, mode: CaptureMode, stamp: Bool, aspect: CGFloat?, sticker: UIImage?, spot: CompanionSpot,
                          place: PhotoLocation?) async {
         defer { processing = false }
         do {
             // The floating friend grows (even when it is not drawn into the photo).
-            let floating = self.companion
+            let floating = self.floater
             let oldLevel = heroGrowth.level
-            let result = try await pipeline.process(data: data, look: look, mode: mode, dateStamp: stamp, aspectRatio: aspect, companion: companion, spot: spot)
+            let result = try await pipeline.process(data: data, look: look, mode: mode, dateStamp: stamp, aspectRatio: aspect, sticker: sticker, spot: spot)
             let mission = DailyMission.of(Date())
             let missionHit = missionDoneDay != DailyMission.dayKey(Date()) && mission.matches(result.labels)
             let gain = try await garden.add(result, filter: look, mode: mode, location: place, extra: missionHit ? DailyMission.bonus : 0,
-                                            friend: floating?.id)
+                                            friend: floating?.tag)
+            babies.load()
             let newLevel = heroGrowth.level
             let stageUp = floating != nil && FriendGrowth.stage(level: newLevel) > FriendGrowth.stage(level: oldLevel)
             if missionHit { missionDoneDay = DailyMission.dayKey(Date()) }
@@ -624,7 +664,7 @@ struct CameraScreen: View {
                    ? "\(LetterWords.withSubject(heroName)) \(FriendGrowth.stage(level: newLevel) == .bloom ? "활짝 만개했어! 이제 교배할 수 있어요 🌼" : "성장기에 들어섰어! 🌿")"
                    : newLevel > oldLevel
                    ? "\(heroName), LV.\(newLevel)! 또 자랐어 🌱"
-                   : "\(companion.map { "\($0.name)랑 같이 찰칵! " } ?? "")\(result.isFood ? "냠냠, 든든한 한 끼" : "이 순간 마음에 들어") · +\(gain) EXP")
+                   : "\(floating.map { "\($0.name)랑 같이 찰칵! " } ?? "")\(result.isFood ? "냠냠, 든든한 한 끼" : "이 순간 마음에 들어") · +\(gain) EXP")
             }
             if autoSave {
                 do { try await PhotoLibraryWriter.save(result.jpeg) }
@@ -661,17 +701,17 @@ private struct CameraPreview: UIViewRepresentable {
 
 /// A picked friend floating in Mori's place. PNG friends have no drawn faces, so they react with their body:
 /// a small squish while the photo is taken and a hop when it reacts.
-private struct FloatingFriend: View {
-    let assetName: String
+private struct FloatingFriend<Picture: View>: View {
     let size: CGFloat
     let expression: MoriExpression
     var floats = true
+    @ViewBuilder let picture: () -> Picture
     @State private var floating = false
 
     private var reacting: Bool { expression != .normal && expression != .shutter }
 
     var body: some View {
-        Image(assetName).resizable().scaledToFit()
+        picture()
             .frame(width: size, height: size)
             .scaleEffect(x: expression == .shutter ? 1.05 : 1, y: expression == .shutter ? 0.93 : 1, anchor: .bottom)
             .scaleEffect(reacting ? 1.08 : 1)
