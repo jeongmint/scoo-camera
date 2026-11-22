@@ -1,12 +1,17 @@
 import SwiftUI
 
-/// 친구 상자: every friend this user has, each with its own level, EXP and growth stage.
+/// 친구 상자: every friend this user has, each with its own level, EXP and growth stage, and the bred babies.
 /// A friend grows from photos taken while it floats on the camera; 기본 모리 keeps the garden's own EXP.
+/// Babies grow with the photos taken after they hatched.
 struct FriendBoxScreen: View {
     @EnvironmentObject private var garden: GardenStore
     @ObservedObject private var friends = FriendStore.shared
     @AppStorage("companion") private var companionRaw = ""
     @State private var picked: OwnedFriend?
+    @StateObject private var breeds = BreedStore()
+    @State private var baby: Breed?
+
+    private var moments: Int { garden.snapshot.moments }
 
     private var bloomCount: Int { friends.friends.filter { $0.stage == .bloom }.count }
 
@@ -16,6 +21,7 @@ struct FriendBoxScreen: View {
                 HStack(spacing: 24) {
                     stat("함께하는 친구", "\(friends.friends.count)마리")
                     stat("만개한 친구", "\(bloomCount)마리")
+                    if !breeds.breeds.isEmpty { stat("아기", "\(breeds.breeds.count)마리") }
                 }
                 Text("카메라에 띄워 둔 친구가 함께 찍은 사진만큼 자라요. 레벨 \(FriendGrowth.growingLevel)에 성장기, 레벨 \(FriendGrowth.bloomLevel)에 활짝 만개하고, 만개한 친구끼리 교배할 수 있어요.")
                     .font(.footnote).foregroundStyle(.secondary)
@@ -29,6 +35,18 @@ struct FriendBoxScreen: View {
                     Text("아직 친구가 없어요. 카메라를 켜면 지금 있는 동네의 친구가 찾아와요.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
+                if !breeds.breeds.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("우리 아기들").font(.subheadline.weight(.semibold))
+                        Text("태어난 뒤 찍은 사진 \(BreedRules.photosToGrowing)장에 성장기, \(BreedRules.photosToGrow)장에 만개해요. 만개한 아기는 다시 교배할 수 있어요.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 12) {
+                        ForEach(breeds.breeds) { item in
+                            Button { baby = item } label: { babyCell(item) }.buttonStyle(.plain)
+                        }
+                    }
+                }
             }
             .padding(22)
         }
@@ -39,6 +57,10 @@ struct FriendBoxScreen: View {
         .sheet(item: $picked) { friend in
             FriendDetailSheet(friendID: friend.id).presentationDetents([.medium, .large])
         }
+        .sheet(item: $baby) { item in
+            BreedDetail(breed: item, moments: moments)
+        }
+        .onAppear { breeds.load() }
     }
 
     /// 기본 모리: the one floating when no friend is picked, growing with the garden's EXP.
@@ -95,6 +117,24 @@ struct FriendBoxScreen: View {
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Palette.moss.opacity(floating ? 0.7 : 0), lineWidth: 1.5))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(friend.character?.name ?? friend.species), 레벨 \(friend.growth.level), \(friend.stage.title)\(floating ? ", 지금 떠 있어요" : "")")
+    }
+
+    private func babyCell(_ item: Breed) -> some View {
+        let stage = item.stage(moments: moments)
+        let photos = item.photosSinceBirth(moments: moments)
+        return VStack(spacing: 4) {
+            BreedPortrait(breed: item, stage: stage).frame(height: 56)
+            Text(item.title).font(.system(size: 10, weight: .medium)).lineLimit(1).minimumScaleFactor(0.6)
+            ProgressView(value: Double(min(photos, BreedRules.photosToGrow)), total: Double(BreedRules.photosToGrow))
+                .tint(Palette.sage).scaleEffect(y: 0.7)
+            Text(stage == .bloom ? "🌼 만개" : "\(stage.title) · \(item.photosLeft(moments: moments))장 남음")
+                .font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.7)
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity)
+        .background(.white.opacity(0.7), in: RoundedRectangle(cornerRadius: 14))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("아기 \(item.title), \(stage.title)")
     }
 
     private func stat(_ title: String, _ value: String) -> some View {
