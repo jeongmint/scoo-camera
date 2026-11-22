@@ -21,8 +21,15 @@ struct OwnedFriend: Codable, Identifiable, Equatable {
     let how: How
     let since: Date
     var origin: String? = nil
+    /// This friend's own EXP, from photos taken while it floated. Older records decode with nil (0).
+    var experience: Int? = nil
+    /// Photos taken while this friend floated. Older records decode with nil (0).
+    var photos: Int? = nil
 
     var character: Species? { Species.find(species) }
+    var xp: Int { experience ?? 0 }
+    var growth: Growth { GrowthRules.growth(for: xp) }
+    var stage: GrowthStage { FriendGrowth.stage(level: growth.level) }
     /// Event friends stay; everything else can be sent in a bottle.
     var canTravel: Bool { how != .event }
 }
@@ -55,6 +62,22 @@ final class FriendStore: ObservableObject {
     var hasStarter: Bool { starter != nil }
 
     func owns(_ speciesID: String) -> Bool { friends.contains { $0.species == speciesID } }
+
+    /// The friend of this character that grows when it floats (the one that came first).
+    func friend(for speciesID: String) -> OwnedFriend? { friends.first { $0.species == speciesID } }
+
+    /// Characters with at least one friend in bloom: only they can be breeding parents.
+    var bloomed: [Species] { species.filter { id in friends.contains { $0.species == id.id && $0.stage == .bloom } } }
+
+    /// A photo taken while this character floated: its EXP goes to that friend alone.
+    @discardableResult
+    func gain(_ exp: Int, species speciesID: String) -> OwnedFriend? {
+        guard let index = friends.firstIndex(where: { $0.species == speciesID }) else { return nil }
+        friends[index].experience = friends[index].xp + max(0, exp)
+        friends[index].photos = (friends[index].photos ?? 0) + 1
+        save()
+        return friends[index]
+    }
 
     /// Replaces the first friend (testing tools re-draw it). Other friends stay.
     func setStarter(_ species: Species, origin: String?, now: Date = Date()) {

@@ -15,6 +15,14 @@ enum WidgetBridge {
         refresh()
     }
 
+    /// The picked friend's own EXP, read straight from storage (FriendStore calls `refresh` while it starts up).
+    private static func ownXP(_ species: Species) -> Int? {
+        struct Saved: Decodable { let friends: [OwnedFriend] }
+        guard let data = UserDefaults.standard.data(forKey: FriendStore.key),
+              let saved = try? JSONDecoder().decode(Saved.self, from: data) else { return nil }
+        return saved.friends.first { $0.species == species.id }?.xp
+    }
+
     /// Call when something outside the garden changes (the user's friend, a new baby).
     static func refresh() {
         guard let garden = lastGarden else { return }
@@ -23,12 +31,13 @@ enum WidgetBridge {
             WalkMode.update(photos: garden.photos.filter { $0.date >= started }.count)
         }
         guard WidgetShared.container != nil else { return }
-        let growth = GrowthRules.growth(for: garden.experience)
         let calendar = Calendar.current
         let friend = Species.find(UserDefaults.standard.string(forKey: "assignedCompanion") ?? "")
         // The character picked in 같이 찍기 floats in Mori's place in the app, so it leads the widget too.
         // (FriendStore clears the pick when that character leaves.)
         let picked = Species.find(UserDefaults.standard.string(forKey: "companion") ?? "")
+        // Each friend grows by itself; 기본 모리 keeps the garden's EXP.
+        let growth = GrowthRules.growth(for: picked.flatMap(ownXP) ?? garden.experience)
         let sidekick = picked == friend ? nil : friend
         let baby = latestBaby()
         let snapshot = WidgetSnapshot(

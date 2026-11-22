@@ -44,6 +44,12 @@ enum LetterWords {
         return (last.value - 0xAC00) % 28 != 0
     }
 
+    /// "귤이" / "도도가".
+    static func withSubject(_ word: String) -> String {
+        guard let final = hasFinal(word) else { return word + "이(가)" }
+        return word + (final ? "이" : "가")
+    }
+
     /// "부여군이야" / "마포야".
     static func withCopula(_ word: String) -> String {
         guard let final = hasFinal(word) else { return word + "(이)야" }

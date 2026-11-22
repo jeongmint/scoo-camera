@@ -66,7 +66,11 @@ struct CameraScreen: View {
     private var ownedCompanions: [Species] { friends.species }
     /// The friend to shoot together with; nil means shooting alone.
     private var companion: Species? { Species.find(companionRaw).flatMap { friends.owns($0.id) ? $0 : nil } }
-    private var moriSize: CGFloat { min(105, 78 + CGFloat(sqrt(Double(max(0, garden.snapshot.experience)))) * 0.3) }
+    /// The floating one's own EXP: the picked friend's, or 기본 모리's. Each friend grows by itself.
+    private var heroXP: Int { companion.flatMap { friends.friend(for: $0.id)?.xp } ?? garden.snapshot.experience }
+    private var heroGrowth: Growth { GrowthRules.growth(for: heroXP) }
+    private var heroName: String { companion?.name ?? garden.snapshot.name }
+    private var moriSize: CGFloat { min(105, 78 + CGFloat(sqrt(Double(max(0, heroXP)))) * 0.3) }
     /// Who answers in talk mode: the floating friend, with the personality grown from the photos.
     private var talkPet: TalkPet {
         TalkPet.of(companion, moriName: garden.snapshot.name, personality: Personality.of(garden.snapshot.photos).title)
@@ -240,11 +244,11 @@ struct CameraScreen: View {
             }.padding(.horizontal, 22)
             HStack(spacing: 8) {
                 Button { sheet = .garden } label: {
-                    Text("\(garden.snapshot.name)  ·  LV.\(garden.growth.level)")
+                    Text("\(heroName)  ·  LV.\(heroGrowth.level)")
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
                         .padding(.horizontal, 10).padding(.vertical, 8)
                         .background(.black.opacity(0.25), in: Capsule())
-                }.disabled(blocked).accessibilityLabel("\(garden.snapshot.name) 성장 기록 열기")
+                }.disabled(blocked).accessibilityLabel("\(heroName) 성장 기록 열기")
                 missionChip
                 Spacer()
                 Menu {
@@ -419,7 +423,7 @@ struct CameraScreen: View {
         .gesture(press)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(companion?.name ?? garden.snapshot.name), 사진 촬영")
-        .accessibilityValue("레벨 \(garden.growth.level)")
+        .accessibilityValue("레벨 \(heroGrowth.level)")
         .accessibilityHint("두 번 탭하면 촬영합니다. 화면에서 꾹 누르고 끌면 이동합니다.")
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { takePhoto(aspect: viewportAspect, spot: spot) }
@@ -537,7 +541,7 @@ struct CameraScreen: View {
         let moment = ProcessedPhoto(jpeg: clip.poster, isFood: false, bonus: 0,
                                     classificationNote: "동영상 \(max(1, Int(clip.seconds.rounded())))초")
         do {
-            let gain = try await garden.add(moment, filter: look, mode: mode, location: place, video: clip.url)
+            let gain = try await garden.add(moment, filter: look, mode: mode, location: place, video: clip.url, friend: companion?.id)
             UINotificationFeedbackGenerator().notificationOccurred(.success)
             react(.smile)
             notify("움직이는 순간도 냠! · +\(gain) EXP")
@@ -594,16 +598,21 @@ struct CameraScreen: View {
                          place: PhotoLocation?) async {
         defer { processing = false }
         do {
-            let oldLevel = garden.growth.level
+            // The floating friend grows (even when it is not drawn into the photo).
+            let floating = self.companion
+            let oldLevel = heroGrowth.level
             let result = try await pipeline.process(data: data, look: look, mode: mode, dateStamp: stamp, aspectRatio: aspect, companion: companion, spot: spot)
             let mission = DailyMission.of(Date())
             let missionHit = missionDoneDay != DailyMission.dayKey(Date()) && mission.matches(result.labels)
-            let gain = try await garden.add(result, filter: look, mode: mode, location: place, extra: missionHit ? DailyMission.bonus : 0)
+            let gain = try await garden.add(result, filter: look, mode: mode, location: place, extra: missionHit ? DailyMission.bonus : 0,
+                                            friend: floating?.id)
+            let newLevel = heroGrowth.level
+            let stageUp = floating != nil && FriendGrowth.stage(level: newLevel) > FriendGrowth.stage(level: oldLevel)
             if missionHit { missionDoneDay = DailyMission.dayKey(Date()) }
             // Babies this user adopted write home about what they saw: only the subject word leaves the phone.
             let subjects = LetterWords.subjects(labels: result.labels, isFood: result.isFood)
             if !subjects.isEmpty { Task { await LetterWords.share(subjects) } }
-            react(MoriExpression.reaction(isFood: result.isFood, bonus: result.bonus, leveledUp: garden.growth.level > oldLevel,
+            react(MoriExpression.reaction(isFood: result.isFood, bonus: result.bonus, leveledUp: newLevel > oldLevel,
                                           previous: lastReaction, roll: .random(in: 0..<1)))
             withAnimation(.easeOut(duration: 0.12)) { shutterFlash = true }
             Task { try? await Task.sleep(for: .milliseconds(160)); withAnimation { shutterFlash = false } }
@@ -611,8 +620,10 @@ struct CameraScreen: View {
             if missionHit {
                 notify("오늘의 미션 성공! \(mission.title) 찰칵 · +\(gain) EXP (미션 +\(DailyMission.bonus))")
             } else {
-            notify(garden.growth.level > oldLevel
-                   ? "\(garden.snapshot.name), LV.\(garden.growth.level)! 또 자랐어 🌱"
+            notify(stageUp
+                   ? "\(LetterWords.withSubject(heroName)) \(FriendGrowth.stage(level: newLevel) == .bloom ? "활짝 만개했어! 이제 교배할 수 있어요 🌼" : "성장기에 들어섰어! 🌿")"
+                   : newLevel > oldLevel
+                   ? "\(heroName), LV.\(newLevel)! 또 자랐어 🌱"
                    : "\(companion.map { "\($0.name)랑 같이 찰칵! " } ?? "")\(result.isFood ? "냠냠, 든든한 한 끼" : "이 순간 마음에 들어") · +\(gain) EXP")
             }
             if autoSave {

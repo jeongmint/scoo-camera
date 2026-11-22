@@ -33,6 +33,8 @@ struct PhotoRecord: Identifiable, Codable, Equatable {
     var location: PhotoLocation? = nil
     /// For video moments: the clip next to the poster JPEG in `filename`.
     var videoFilename: String? = nil
+    /// The character floating when it was taken (its EXP went to that friend); nil = 기본 모리.
+    var friend: String? = nil
 
     var isVideo: Bool { videoFilename != nil }
 }

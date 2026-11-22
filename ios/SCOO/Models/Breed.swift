@@ -45,6 +45,25 @@ struct Breed: Identifiable, Codable, Equatable {
 }
 
 /// 성장 3단계: a baby grows with the photos taken after it hatched, and blooms (gets its daisy) at the end.
+/// Regular friends grow by their own level: 성장 at level 3, 만개 at level 5. Only friends in bloom can breed.
+enum FriendGrowth {
+    static let growingLevel = 3
+    static let bloomLevel = 5
+
+    static func stage(level: Int) -> GrowthStage {
+        if level >= bloomLevel { return .bloom }
+        if level >= growingLevel { return .growing }
+        return .baby
+    }
+
+    /// EXP still needed for the next stage, nil once in bloom.
+    static func toNextStage(xp: Int) -> Int? {
+        let level = GrowthRules.growth(for: xp).level
+        let next = level < growingLevel ? growingLevel : (level < bloomLevel ? bloomLevel : nil)
+        return next.map { ($0 - 1) * 100 - xp }
+    }
+}
+
 enum GrowthStage: Int, Comparable {
     case baby, growing, bloom
 
