@@ -15,6 +15,16 @@ enum WidgetBridge {
         refresh()
     }
 
+    /// The floating one's picture: a bred baby's portrait, a friend, or Mori.
+    @ViewBuilder
+    private static func hero(picked: Species?, baby: Breed?, moments: Int) -> some View {
+        if let baby {
+            BreedPortrait(breed: baby, stage: baby.stage(moments: moments))
+        } else {
+            Image(picked?.assetName ?? "Companion-mori").resizable().scaledToFit()
+        }
+    }
+
     /// The picked friend's own EXP, read straight from storage (FriendStore calls `refresh` while it starts up).
     private static func ownXP(_ species: Species) -> Int? {
         struct Saved: Decodable { let friends: [OwnedFriend] }
@@ -35,22 +45,29 @@ enum WidgetBridge {
         let friend = Species.find(UserDefaults.standard.string(forKey: "assignedCompanion") ?? "")
         // The character picked in 같이 찍기 floats in Mori's place in the app, so it leads the widget too.
         // (FriendStore clears the pick when that character leaves.)
-        let picked = Species.find(UserDefaults.standard.string(forKey: "companion") ?? "")
-        // Each friend grows by itself; 기본 모리 keeps the garden's EXP.
-        let growth = GrowthRules.growth(for: picked.flatMap(ownXP) ?? garden.experience)
+        let raw = UserDefaults.standard.string(forKey: "companion") ?? ""
+        let picked = Species.find(raw)
+        // A floating bred baby leads the widget too.
+        let floatingBaby: Breed? = Floater.babyID(raw).flatMap { id in
+            let babies = BreedStore()
+            babies.load()
+            return babies.breeds.first { $0.id == id }
+        }
+        // Everyone grows by themselves; 기본 모리 keeps the garden's EXP.
+        let growth = GrowthRules.growth(for: floatingBaby?.xp(moments: garden.moments) ?? picked.flatMap(ownXP) ?? garden.experience)
         let sidekick = picked == friend ? nil : friend
         let baby = latestBaby()
         let snapshot = WidgetSnapshot(
-            name: picked?.name ?? garden.name, level: growth.level, progress: growth.progress, moments: garden.moments,
+            name: floatingBaby.map { "아기 \($0.title)" } ?? picked?.name ?? garden.name, level: growth.level, progress: growth.progress, moments: garden.moments,
             todayCount: garden.photos.filter { calendar.isDateInToday($0.date) }.count,
             today: calendar.startOfDay(for: Date()),
             friendName: sidekick?.name,
             baby: baby.map { WidgetSnapshot.Baby(title: $0.title, photosLeft: $0.photosLeft(moments: garden.moments),
                                                   adult: $0.isAdult(moments: garden.moments)) },
             updated: Date())
-        writeImage(Image(picked?.assetName ?? "Companion-mori").resizable().scaledToFit(), as: "hero")
+        writeImage(hero(picked: picked, baby: floatingBaby, moments: garden.moments), as: "hero")
         // Live Activities only take tiny images.
-        writeImage(Image(picked?.assetName ?? "Companion-mori").resizable().scaledToFit(), as: "hero-small", side: 64)
+        writeImage(hero(picked: picked, baby: floatingBaby, moments: garden.moments), as: "hero-small", side: 64)
         if let sidekick { writeImage(Image(sidekick.assetName).resizable().scaledToFit(), as: "friend") }
         if let baby { writeImage(BreedPortrait(breed: baby, adult: baby.isAdult(moments: garden.moments)), as: "baby") }
         snapshot.save()

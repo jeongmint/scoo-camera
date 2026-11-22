@@ -53,6 +53,31 @@ final class BreedStore: ObservableObject {
         try write([baby] + breeds)
     }
 
+    /// A photo taken while this baby floated: its EXP goes to this baby alone.
+    @discardableResult
+    func gain(_ exp: Int, id: UUID, moments: Int) -> Breed? {
+        load()
+        guard let index = breeds.firstIndex(where: { $0.id == id }) else { return nil }
+        var next = breeds
+        next[index].experience = next[index].xp(moments: moments) + max(0, exp)
+        next[index].together = (next[index].together ?? 0) + 1
+        do { try write(next) } catch { message = "아기 기록을 저장하지 못했어요."; return nil }
+        return next[index]
+    }
+
+    /// Babies from before they grew by floating keep what they grew so far, and from now on grow only when they
+    /// float. Run once the garden's photo count is known; does nothing when there is nothing to change.
+    func freezeLegacy(moments: Int) {
+        load()
+        guard breeds.contains(where: { $0.experience == nil }) else { return }
+        let next = breeds.map { baby -> Breed in
+            var baby = baby
+            if baby.experience == nil { baby.experience = baby.xp(moments: moments) }
+            return baby
+        }
+        try? write(next)
+    }
+
     private func write(_ next: [Breed]) throws {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try JSONEncoder().encode(next).write(to: url, options: .atomic)

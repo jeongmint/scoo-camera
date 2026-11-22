@@ -51,7 +51,7 @@ struct BreedScreen: View {
         .foregroundStyle(Palette.ink)
         .navigationTitle("교배")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { store.load() }
+        .onAppear { store.freezeLegacy(moments: moments) }
         .fullScreenCover(item: $hatching) { baby in
             HatchView(breed: baby) { hatching = nil }
         }
@@ -208,12 +208,12 @@ struct BreedScreen: View {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
                     ForEach(store.breeds) { baby in
                         let stage = baby.stage(moments: moments)
-                        let next = GrowthStage.photosToNext(after: baby.photosSinceBirth(moments: moments))
+                        let level = baby.growth(moments: moments).level
                         Button { showing = baby } label: {
                             VStack(spacing: 4) {
                                 BreedPortrait(breed: baby, stage: stage).frame(height: 84)
                                 Text(baby.title).font(.system(size: 10, weight: .medium)).lineLimit(1).minimumScaleFactor(0.7)
-                                Text((baby.origin.map { "\($0) 출신 · " } ?? "") + (stage == .bloom ? "만개" : "\(stage.title) · 사진 \(next)장 더"))
+                                Text((baby.origin.map { "\($0) 출신 · " } ?? "") + (stage == .bloom ? "만개 · LV.\(level)" : "\(stage.title) · LV.\(level)"))
                                     .font(.system(size: 9)).foregroundStyle(.secondary)
                             }
                             .padding(8)
@@ -324,6 +324,7 @@ struct BreedDetail: View {
     let breed: Breed
     let moments: Int
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("companion") private var companionRaw = ""
     @State private var drawing = false
     @State private var redrawn = false
     @State private var drawError: String?
@@ -341,7 +342,8 @@ struct BreedDetail: View {
     var body: some View {
         let adult = breed.isAdult(moments: moments)
         let stage = breed.stage(moments: moments)
-        let photos = breed.photosSinceBirth(moments: moments)
+        let growth = breed.growth(moments: moments)
+        let floating = companionRaw == Floater.tag(breed)
         let drawn = BreedArt.hasArt(breed)
         NavigationStack {
             ScrollView {
@@ -361,12 +363,27 @@ struct BreedDetail: View {
                     if adult {
                         Text("활짝 핀 만개예요. 이제 부모가 되어 다시 교배할 수 있어요.").font(.subheadline).foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
-                    } else {
-                        VStack(spacing: 6) {
-                            Text("사진 \(GrowthStage.photosToNext(after: photos))장 더 찍으면 \(stage == .baby ? "성장" : "만개")").font(.subheadline)
-                            ProgressView(value: Double(photos), total: Double(BreedRules.photosToGrow))
-                                .tint(Palette.sage).frame(maxWidth: 220)
+                    } else if let left = FriendGrowth.toNextStage(xp: breed.xp(moments: moments)) {
+                        Text("\(stage == .baby ? "성장기" : "만개")까지 \(left) EXP").font(.subheadline)
+                    }
+                    VStack(spacing: 6) {
+                        HStack {
+                            Text("LV.\(growth.level)").font(.system(.subheadline, design: .monospaced).weight(.semibold))
+                            Spacer()
+                            Text("\(growth.progress) / 100 EXP").font(.caption).monospacedDigit().foregroundStyle(.secondary)
                         }
+                        ProgressView(value: Double(growth.progress), total: 100).tint(Palette.sage)
+                        Text("함께 찍은 사진 \(breed.together ?? 0)장 · 떠 있는 동안 찍은 사진의 EXP는 이 아기만 받아요.")
+                            .font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: 260)
+                    Button {
+                        companionRaw = floating ? "" : Floater.tag(breed)
+                        dismiss()
+                    } label: {
+                        Text(floating ? "기본 모리로 돌아가기" : "카메라에 띄우기")
+                            .font(.subheadline.weight(.semibold)).frame(maxWidth: 260).padding(.vertical, 12)
+                            .background(Palette.moss, in: Capsule()).foregroundStyle(.white)
                     }
                     HStack(spacing: 22) {
                         parent(breed.mother, name: breed.nameA, role: "부모 A · 몸과 표정")

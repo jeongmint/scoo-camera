@@ -143,7 +143,10 @@ final class FriendStore: ObservableObject {
         seen.formUnion(friends.map(\.species))
         if let data = try? JSONEncoder().encode(Saved(friends: friends, seen: Array(seen))) { defaults.set(data, forKey: Self.key) }
         // the camera friend (`companion`) must be one the user still has
-        if let picked = defaults.string(forKey: "companion"), !picked.isEmpty, !owns(picked) { defaults.set("", forKey: "companion") }
+        // (a floating baby is checked against the babies instead)
+        if let picked = defaults.string(forKey: "companion"), !picked.isEmpty, Floater.babyID(picked) == nil, !owns(picked) {
+            defaults.set("", forKey: "companion")
+        }
         WidgetBridge.refresh()
     }
 }

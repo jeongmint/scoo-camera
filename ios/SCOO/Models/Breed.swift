@@ -25,6 +25,12 @@ struct Breed: Identifiable, Codable, Equatable {
     var artB: String? = nil
     /// 1 for a baby of two species, 2 when a parent was a bred baby, and so on.
     var generation: Int? = nil
+    /// The baby's own EXP, from photos taken while it floated on the camera (like friends). New babies start at 0.
+    /// Records from before babies could float decode with nil: they grew with every photo, and
+    /// `BreedStore.freezeLegacy` turns that progress into EXP once.
+    var experience: Int? = 0
+    /// Photos taken while this baby floated.
+    var together: Int? = 0
 
     var key: String { "\(parentA)-\(parentB)" }
     /// Drawn baby, made with tools/breeding (`cutout --to-assets`).
@@ -37,11 +43,24 @@ struct Breed: Identifiable, Codable, Equatable {
     /// How this baby is named when it becomes a parent itself.
     var parentID: String { "b_" + id.uuidString.lowercased().replacingOccurrences(of: "-", with: "").prefix(12) }
 
-    func stage(moments: Int) -> GrowthStage { GrowthStage.of(photos: photosSinceBirth(moments: moments)) }
+    /// Own EXP; an old record (nil) counts what it grew from every photo until now.
+    func xp(moments: Int) -> Int { experience ?? Self.legacyXP(photos: photosSinceBirth(moments: moments)) }
+    func growth(moments: Int) -> Growth { GrowthRules.growth(for: xp(moments: moments)) }
+    /// Like friends: 성장 at level 3, 만개 at level 5.
+    func stage(moments: Int) -> GrowthStage { FriendGrowth.stage(level: growth(moments: moments).level) }
 
     func photosSinceBirth(moments: Int) -> Int { max(0, moments - bornAtMoment) }
-    func isAdult(moments: Int) -> Bool { photosSinceBirth(moments: moments) >= BreedRules.photosToGrow }
-    func photosLeft(moments: Int) -> Int { max(0, BreedRules.photosToGrow - photosSinceBirth(moments: moments)) }
+    func isAdult(moments: Int) -> Bool { stage(moments: moments) == .bloom }
+    /// About how many photos together until bloom (at the smallest reward per photo).
+    func photosLeft(moments: Int) -> Int {
+        let left = max(0, (FriendGrowth.bloomLevel - 1) * 100 - xp(moments: moments))
+        return Int((Double(left) / Double(GrowthRules.reward(isFood: false, bonus: 0))).rounded(.up))
+    }
+
+    /// Before babies grew by floating, 5 photos made them 성장 and 10 made them 만개: the same stages in EXP.
+    static func legacyXP(photos: Int) -> Int {
+        min((FriendGrowth.bloomLevel - 1) * 100, photos * (FriendGrowth.bloomLevel - 1) * 100 / BreedRules.photosToGrow)
+    }
 }
 
 /// 성장 3단계: a baby grows with the photos taken after it hatched, and blooms (gets its daisy) at the end.

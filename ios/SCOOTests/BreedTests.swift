@@ -40,9 +40,12 @@ final class BreedTests: XCTestCase {
         XCTAssertEqual(baby.babyAsset, "Breed-tori-sia")
         XCTAssertEqual(baby.adultAsset, "Adult-tori-sia")
         XCTAssertEqual(baby.title, "토리 × 시아")
-        XCTAssertFalse(baby.isAdult(moments: 40))
-        XCTAssertEqual(baby.photosLeft(moments: 43), BreedRules.photosToGrow - 3)
-        XCTAssertTrue(baby.isAdult(moments: 40 + BreedRules.photosToGrow))
+        // A new baby grows only from photos taken while it floats (its own EXP), not from every photo.
+        XCTAssertFalse(baby.isAdult(moments: 40 + BreedRules.photosToGrow))
+        var grown = baby
+        grown.experience = (FriendGrowth.bloomLevel - 1) * 100
+        XCTAssertTrue(grown.isAdult(moments: 40))
+        XCTAssertEqual(grown.photosLeft(moments: 40), 0)
         XCTAssertEqual(baby.photosSinceBirth(moments: 10), 0, "사진이 지워져 줄어도 음수가 되지 않아요")
     }
 

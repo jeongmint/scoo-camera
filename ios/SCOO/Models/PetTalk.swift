@@ -26,6 +26,15 @@ struct TalkPet: Equatable {
         return TalkPet(name: species.name, kind: look.kind, personality: personality, tint: look.tint, pitch: look.pitch)
     }
 
+    /// A floating bred baby: parent A's shape, parent B's color, a little higher voice.
+    static func of(baby: Breed, personality: String) -> TalkPet {
+        let mother = baby.mother.map { of($0, moriName: "모리", personality: personality) }
+        let father = baby.father.map { of($0, moriName: "모리", personality: personality) }
+        let name = "아기 " + (baby.nameA ?? baby.mother?.name ?? "친구")
+        return TalkPet(name: name, kind: "\(mother?.kind ?? "작은 친구")를 닮은 아기 (\(baby.title))", personality: personality,
+                       tint: father?.tint ?? mother?.tint ?? (0.62, 0.74, 0.58), pitch: min(2, (mother?.pitch ?? 1.3) + 0.15))
+    }
+
     private struct Look {
         let kind: String
         let tint: (red: Double, green: Double, blue: Double)

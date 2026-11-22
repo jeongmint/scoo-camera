@@ -30,3 +30,50 @@ struct CompanionSpot: Equatable {
         return CGRect(x: size.width * center.x - side / 2, y: size.height * center.y - side / 2, width: side, height: side)
     }
 }
+
+/// Who floats on the camera in Mori's place: a friend or a bred baby (nil = 기본 모리).
+/// Stored in UserDefaults "companion" as the species id, or "baby:" + the baby's id.
+enum Floater: Equatable {
+    case friend(Species)
+    case baby(Breed)
+
+    static let babyPrefix = "baby:"
+
+    static func tag(_ baby: Breed) -> String { babyPrefix + baby.id.uuidString }
+
+    /// The baby a stored tag points at, if it is a baby tag.
+    static func babyID(_ raw: String) -> UUID? {
+        guard raw.hasPrefix(babyPrefix) else { return nil }
+        return UUID(uuidString: String(raw.dropFirst(babyPrefix.count)))
+    }
+
+    /// Resolves a stored tag against what this user has now; nil (기본 모리) when it left.
+    static func resolve(_ raw: String, owns: (String) -> Bool, babies: [Breed]) -> Floater? {
+        if let id = babyID(raw) { return babies.first { $0.id == id }.map(Floater.baby) }
+        guard let species = Species.find(raw), owns(species.id) else { return nil }
+        return .friend(species)
+    }
+
+    var tag: String {
+        switch self {
+        case .friend(let species): return species.id
+        case .baby(let baby): return Floater.tag(baby)
+        }
+    }
+
+    var name: String {
+        switch self {
+        case .friend(let species): return species.name
+        case .baby(let baby): return "아기 \(baby.title)"
+        }
+    }
+
+    var species: Species? {
+        if case .friend(let species) = self { return species }
+        return nil
+    }
+    var baby: Breed? {
+        if case .baby(let baby) = self { return baby }
+        return nil
+    }
+}

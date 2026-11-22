@@ -95,14 +95,22 @@ final class GardenStore: ObservableObject {
     }
 
     @discardableResult
-    /// `friend`: the floating character (its own EXP grows); nil = 기본 모리. Returns the EXP gained.
+    /// `friend`: the floating one's tag (a species id or a baby tag, see `Floater`); its own EXP grows.
+    /// nil, or one that has left = 기본 모리. Returns the EXP gained.
     func add(_ photo: ProcessedPhoto, filter: FilmLook, mode: CaptureMode, location: PhotoLocation? = nil, extra: Int = 0,
              video: URL? = nil, friend: String? = nil) async throws -> Int {
-        let grower = friend.flatMap { FriendStore.shared.owns($0) ? $0 : nil }
+        let babies = BreedStore()
+        babies.load()
+        let grower = friend.flatMap { Floater.resolve($0, owns: { FriendStore.shared.owns($0) }, babies: babies.breeds) }
+        let moments = snapshot.moments
         snapshot = try await repository.add(photo, filter: filter, mode: mode, location: location, extra: extra, video: video,
-                                            friend: grower)
+                                            friend: grower?.tag)
         let gain = snapshot.photos.first?.experience ?? 0
-        if let grower { FriendStore.shared.gain(gain, species: grower) }
+        switch grower {
+        case .friend(let species): FriendStore.shared.gain(gain, species: species.id)
+        case .baby(let baby): babies.gain(gain, id: baby.id, moments: moments)
+        case nil: break
+        }
         WidgetBridge.publish(snapshot)
         return gain
     }
