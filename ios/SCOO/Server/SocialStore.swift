@@ -181,8 +181,8 @@ final class SocialStore: ObservableObject {
     }
 
     func setNickname(_ name: String) async throws {
-        let clean = String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(12))
-        guard !clean.isEmpty else { throw SCOOError.message("이름을 한 글자 이상 적어 주세요.") }
+        // Friends see this name: the same rules as friend names, a little longer.
+        let clean = try NameFilter.accept(name, maxLength: 12).get()
         let me = try await client.signIn().userID
         try await client.update("profiles?id=eq.\(me)", ["nickname": clean])
         await refresh()

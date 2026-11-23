@@ -106,7 +106,7 @@ struct FriendBoxScreen: View {
                     .frame(minWidth: 18, minHeight: 18)
                     .background(friend.stage == .bloom ? Palette.moss : Palette.sage, in: Circle())
             }
-            Text(friend.character?.name ?? friend.species)
+            Text(friend.name)
                 .font(.system(size: 11, weight: .medium)).lineLimit(1).minimumScaleFactor(0.7)
             ProgressView(value: Double(friend.growth.progress), total: 100).tint(Palette.sage).scaleEffect(y: 0.7)
             Text(friend.stage == .bloom ? "🌼 만개" : friend.stage.title)
@@ -117,7 +117,7 @@ struct FriendBoxScreen: View {
         .background(.white.opacity(0.7), in: RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Palette.moss.opacity(floating ? 0.7 : 0), lineWidth: 1.5))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(friend.character?.name ?? friend.species), 레벨 \(friend.growth.level), \(friend.stage.title)\(floating ? ", 지금 떠 있어요" : "")")
+        .accessibilityLabel("\(friend.name), 레벨 \(friend.growth.level), \(friend.stage.title)\(floating ? ", 지금 떠 있어요" : "")")
     }
 
     private func babyCell(_ item: Breed) -> some View {
@@ -133,7 +133,7 @@ struct FriendBoxScreen: View {
                     .frame(minWidth: 18, minHeight: 18)
                     .background(stage == .bloom ? Palette.moss : Palette.sage, in: Circle())
             }
-            Text(item.title).font(.system(size: 10, weight: .medium)).lineLimit(1).minimumScaleFactor(0.6)
+            Text(item.name).font(.system(size: 11, weight: .medium)).lineLimit(1).minimumScaleFactor(0.6)
             ProgressView(value: Double(growth.progress), total: 100).tint(Palette.sage).scaleEffect(y: 0.7)
             Text(stage == .bloom ? "🌼 만개" : stage.title)
                 .font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.7)
@@ -143,7 +143,7 @@ struct FriendBoxScreen: View {
         .background(.white.opacity(0.7), in: RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Palette.moss.opacity(floating ? 0.7 : 0), lineWidth: 1.5))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("아기 \(item.title), 레벨 \(growth.level), \(stage.title)\(floating ? ", 지금 떠 있어요" : "")")
+        .accessibilityLabel("아기 \(item.name), \(item.title), 레벨 \(growth.level), \(stage.title)\(floating ? ", 지금 떠 있어요" : "")")
     }
 
     private func stat(_ title: String, _ value: String) -> some View {
@@ -170,7 +170,10 @@ private struct FriendDetailSheet: View {
             ScrollView {
                 VStack(spacing: 14) {
                     SpeciesPortrait(species: species).scaleEffect(friend.stage.scale).frame(height: 150)
-                    Text(species.name).font(.title2.weight(.semibold))
+                    Text(friend.name).font(.title2.weight(.semibold))
+                    if friend.nickname != nil { Text(species.name).font(.caption).foregroundStyle(.secondary) }
+                    NameEditor(fallback: species.name, current: friend.nickname) { try friends.rename(friend.id, to: $0) }
+                        .frame(maxWidth: 300)
                     Text(FriendDetailSheet.origin(of: friend)).font(.footnote).foregroundStyle(.secondary)
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {

@@ -79,7 +79,14 @@ struct CameraScreen: View {
         }
     }
     private var heroGrowth: Growth { GrowthRules.growth(for: heroXP) }
-    private var heroName: String { floater?.name ?? garden.snapshot.name }
+    /// The floating one's name: the name the user gave, or its own.
+    private var heroName: String {
+        switch floater {
+        case .friend(let species): return friends.friend(for: species.id)?.name ?? species.name
+        case .baby(let baby): return baby.name
+        case nil: return garden.snapshot.name
+        }
+    }
     /// The floating one's picture for drawing into the photo (babies are rendered from their portrait).
     private func sticker() -> UIImage? {
         switch floater {
@@ -100,8 +107,10 @@ struct CameraScreen: View {
     /// Who answers in talk mode: the floating friend, with the personality grown from the photos.
     private var talkPet: TalkPet {
         let personality = Personality.of(garden.snapshot.photos).title
-        if let baby = floater?.baby { return TalkPet.of(baby: baby, personality: personality) }
-        return TalkPet.of(companion, moriName: garden.snapshot.name, personality: personality)
+        var pet = floater?.baby.map { TalkPet.of(baby: $0, personality: personality) }
+            ?? TalkPet.of(companion, moriName: garden.snapshot.name, personality: personality)
+        if floater != nil { pet.name = heroName }
+        return pet
     }
     /// While talking, the friend wears the face of what it says.
     private var face: MoriExpression { talk.phase == .speaking ? talk.mood : expression }
@@ -308,8 +317,11 @@ struct CameraScreen: View {
                     Section("떠 있는 친구") {
                         Picker("떠 있는 친구", selection: $companionRaw) {
                             Text("기본 모리").tag("")
-                            ForEach(ownedCompanions) { friend in Text(friend.menuTitle).tag(friend.id) }
-                            ForEach(babies.breeds) { baby in Text("아기 · \(baby.title)").tag(Floater.tag(baby)) }
+                            ForEach(ownedCompanions) { friend in
+                                let given = friends.friend(for: friend.id)?.nickname
+                                Text(given.map { "\($0) · \(friend.menuTitle)" } ?? friend.menuTitle).tag(friend.id)
+                            }
+                            ForEach(babies.breeds) { baby in Text("아기 \(baby.name) · \(baby.title)").tag(Floater.tag(baby)) }
                         }
                     }
                     Section {
@@ -326,7 +338,7 @@ struct CameraScreen: View {
                     }
                 } label: {
                     HStack(spacing: 5) {
-                        Text(floater.map { "\(mode.title) · \($0.name)" } ?? mode.title)
+                        Text(floater == nil ? mode.title : "\(mode.title) · \(heroName)")
                         if floater != nil && companionInPhoto {
                             Image(systemName: "camera.fill").font(.system(size: 8))
                         }
@@ -335,7 +347,7 @@ struct CameraScreen: View {
                         .font(.system(size: 11, weight: .medium)).padding(.horizontal, 15).frame(height: 38)
                         .background(.black.opacity(0.25), in: Capsule())
                 }.disabled(blocked)
-                    .accessibilityLabel("촬영 모드, \(mode.title), \(floater.map { "\($0.name), " + (companionInPhoto ? "사진에 같이 찍기" : "화면에만") } ?? "기본 모리")")
+                    .accessibilityLabel("촬영 모드, \(mode.title), \(floater == nil ? "기본 모리" : "\(heroName), " + (companionInPhoto ? "사진에 같이 찍기" : "화면에만"))")
                 Spacer()
                 Button { camera.flip() } label: {
                     Image(systemName: "arrow.triangle.2.circlepath.camera").font(.system(size: 21)).frame(width: 48, height: 48)
@@ -664,7 +676,7 @@ struct CameraScreen: View {
                    ? "\(LetterWords.withSubject(heroName)) \(FriendGrowth.stage(level: newLevel) == .bloom ? "활짝 만개했어! 이제 교배할 수 있어요 🌼" : "성장기에 들어섰어! 🌿")"
                    : newLevel > oldLevel
                    ? "\(heroName), LV.\(newLevel)! 또 자랐어 🌱"
-                   : "\(floating.map { "\($0.name)랑 같이 찰칵! " } ?? "")\(result.isFood ? "냠냠, 든든한 한 끼" : "이 순간 마음에 들어") · +\(gain) EXP")
+                   : "\(floating == nil ? "" : "\(heroName)랑 같이 찰칵! ")\(result.isFood ? "냠냠, 든든한 한 끼" : "이 순간 마음에 들어") · +\(gain) EXP")
             }
             if autoSave {
                 do { try await PhotoLibraryWriter.save(result.jpeg) }

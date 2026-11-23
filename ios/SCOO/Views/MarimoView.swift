@@ -131,6 +131,7 @@ struct GardenScreen: View {
     @State private var happy = false
     @State private var renaming = false
     @State private var name = ""
+    @State private var nameProblem: String?
     @State private var line = "오늘은 어떤 순간을 먹을까?"
     @State private var film: RenderedFilm?
     @State private var walking = WalkMode.isActive
@@ -154,10 +155,12 @@ struct GardenScreen: View {
     }
     /// The floating one's name: a friend, a bred baby, or nil for Mori.
     private var floatingName: String? {
-        guard let id = Floater.babyID(companionRaw) else { return floatingFriend?.name }
+        guard let id = Floater.babyID(companionRaw) else {
+            return floatingFriend.map { FriendStore.shared.friend(for: $0.id)?.name ?? $0.name }
+        }
         let babies = BreedStore()
         babies.load()
-        return babies.breeds.first { $0.id == id }.map { "아기 \($0.title)" }
+        return babies.breeds.first { $0.id == id }?.name
     }
 
     var body: some View {
@@ -240,10 +243,17 @@ struct GardenScreen: View {
                     Button("확인") { walkMessage = nil }
                 } message: { Text(walkMessage ?? "") }
                 .alert("마리모 이름", isPresented: $renaming) {
-                    TextField("이름 (최대 12자)", text: $name)
-                    Button("저장") { Task { await garden.rename(name) } }
+                    TextField("이름 (최대 \(NameFilter.maxLength)자)", text: $name)
+                    Button("저장") {
+                        if let problem = NameFilter.problem(name) { nameProblem = problem.message }
+                        else { Task { await garden.rename(name) } }
+                    }
                     Button("취소", role: .cancel) { }
                 }
+                .alert("이름을 바꾸지 못했어요", isPresented: Binding(get: { nameProblem != nil }, set: { if !$0 { nameProblem = nil } })) {
+                    Button("다시 짓기") { nameProblem = nil; renaming = true }
+                    Button("닫기", role: .cancel) { nameProblem = nil }
+                } message: { Text(nameProblem ?? "") }
         }.tint(Palette.moss)
     }
     private func toggleWalk() {

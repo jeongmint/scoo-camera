@@ -61,9 +61,7 @@ actor PhotoRepository {
 
     func rename(_ name: String) throws -> GardenSnapshot {
         var next = try load()
-        let clean = String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(12))
-        guard !clean.isEmpty else { throw SCOOError.message("이름을 한 글자 이상 적어 주세요.") }
-        next.name = clean
+        next.name = try NameFilter.accept(name).get()
         try persist(next)
         return next
     }

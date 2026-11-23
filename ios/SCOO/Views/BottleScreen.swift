@@ -343,15 +343,19 @@ private struct AdoptedSheet: View {
         VStack(spacing: 16) {
             switch gift {
             case .baby(let baby):
-                BreedPortrait(breed: baby).frame(width: 220, height: 220)
+                BreedPortrait(breed: baby).frame(width: 200, height: 200)
                 Text("\(baby.origin ?? "어딘가")에서 온 아이").font(.title3.weight(.semibold))
                 Text(baby.title).font(.subheadline).foregroundStyle(.secondary)
-                Text("우리 아기들에 들어왔어요. 사진을 \(BreedRules.photosToGrowing)장 찍으면 성장, \(BreedRules.photosToGrow)장이면 데이지를 단 만개가 돼요.")
+                NameEditor(fallback: baby.autoName) { try BreedStore().rename(baby.id, to: $0) }.frame(maxWidth: 300)
+                Text("우리 아기들에 들어왔어요. 카메라에 띄워 두고 함께 찍으면 자라서, 레벨 \(FriendGrowth.growingLevel)에 성장기, \(FriendGrowth.bloomLevel)에 데이지를 단 만개가 돼요.")
                     .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
             case .character(let species):
-                SpeciesPortrait(species: species).frame(width: 220, height: 220)
+                SpeciesPortrait(species: species).frame(width: 200, height: 200)
                 Text("새 친구, \(species.name)").font(.title3.weight(.semibold))
-                Text("내 친구가 됐어요. 카메라에 띄우거나 교배할 때 부모로 고를 수 있어요.")
+                if let newest = FriendStore.shared.friends.last(where: { $0.species == species.id }) {
+                    NameEditor(fallback: species.name) { try FriendStore.shared.rename(newest.id, to: $0) }.frame(maxWidth: 300)
+                }
+                Text("내 친구가 됐어요. 카메라에 띄워 두고 함께 찍으면 자라고, 만개하면 교배할 때 부모로 고를 수 있어요.")
                     .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
             }
             Button("반가워!") { dismiss() }

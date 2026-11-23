@@ -53,6 +53,19 @@ final class BreedStore: ObservableObject {
         try write([baby] + breeds)
     }
 
+    /// Names a baby (nil or "" = back to the made-up name). Checked by `NameFilter`.
+    func rename(_ id: UUID, to raw: String?) throws {
+        load()
+        guard let index = breeds.firstIndex(where: { $0.id == id }) else { return }
+        var next = breeds
+        if let raw, !NameFilter.clean(raw).isEmpty {
+            next[index].nickname = try NameFilter.accept(raw).get()
+        } else {
+            next[index].nickname = nil
+        }
+        try write(next)
+    }
+
     /// A photo taken while this baby floated: its EXP goes to this baby alone.
     @discardableResult
     func gain(_ exp: Int, id: UUID, moments: Int) -> Breed? {
