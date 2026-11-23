@@ -25,12 +25,13 @@ enum WidgetBridge {
         }
     }
 
-    /// The picked friend's own EXP, read straight from storage (FriendStore calls `refresh` while it starts up).
-    private static func ownXP(_ species: Species) -> Int? {
+    /// The picked friend (its own EXP and name), read straight from storage (FriendStore calls `refresh` while it
+    /// starts up).
+    private static func ownFriend(_ species: Species) -> OwnedFriend? {
         struct Saved: Decodable { let friends: [OwnedFriend] }
         guard let data = UserDefaults.standard.data(forKey: FriendStore.key),
               let saved = try? JSONDecoder().decode(Saved.self, from: data) else { return nil }
-        return saved.friends.first { $0.species == species.id }?.xp
+        return saved.friends.first { $0.species == species.id }
     }
 
     /// Call when something outside the garden changes (the user's friend, a new baby).
@@ -54,11 +55,11 @@ enum WidgetBridge {
             return babies.breeds.first { $0.id == id }
         }
         // Everyone grows by themselves; 기본 모리 keeps the garden's EXP.
-        let growth = GrowthRules.growth(for: floatingBaby?.xp(moments: garden.moments) ?? picked.flatMap(ownXP) ?? garden.experience)
+        let growth = GrowthRules.growth(for: floatingBaby?.xp(moments: garden.moments) ?? picked.flatMap { ownFriend($0)?.xp } ?? garden.experience)
         let sidekick = picked == friend ? nil : friend
         let baby = latestBaby()
         let snapshot = WidgetSnapshot(
-            name: floatingBaby.map { "아기 \($0.title)" } ?? picked?.name ?? garden.name, level: growth.level, progress: growth.progress, moments: garden.moments,
+            name: floatingBaby?.name ?? picked.map { ownFriend($0)?.name ?? $0.name } ?? garden.name, level: growth.level, progress: growth.progress, moments: garden.moments,
             todayCount: garden.photos.filter { calendar.isDateInToday($0.date) }.count,
             today: calendar.startOfDay(for: Date()),
             friendName: sidekick?.name,

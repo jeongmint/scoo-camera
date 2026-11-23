@@ -25,8 +25,12 @@ struct OwnedFriend: Codable, Identifiable, Equatable {
     var experience: Int? = nil
     /// Photos taken while this friend floated. Older records decode with nil (0).
     var photos: Int? = nil
+    /// A name the user gave (kept on this iPhone only; a friend leaving in a bottle travels without it).
+    var nickname: String? = nil
 
     var character: Species? { Species.find(species) }
+    /// The given name, or the character's own name.
+    var name: String { nickname ?? character?.name ?? species }
     var xp: Int { experience ?? 0 }
     var growth: Growth { GrowthRules.growth(for: xp) }
     var stage: GrowthStage { FriendGrowth.stage(level: growth.level) }
@@ -68,6 +72,17 @@ final class FriendStore: ObservableObject {
 
     /// Characters with at least one friend in bloom: only they can be breeding parents.
     var bloomed: [Species] { species.filter { id in friends.contains { $0.species == id.id && $0.stage == .bloom } } }
+
+    /// Names a friend (nil or "" = back to the character's own name). Checked by `NameFilter`.
+    func rename(_ id: UUID, to raw: String?) throws {
+        guard let index = friends.firstIndex(where: { $0.id == id }) else { return }
+        if let raw, !NameFilter.clean(raw).isEmpty {
+            friends[index].nickname = try NameFilter.accept(raw).get()
+        } else {
+            friends[index].nickname = nil
+        }
+        save()
+    }
 
     /// A photo taken while this character floated: its EXP goes to that friend alone.
     @discardableResult

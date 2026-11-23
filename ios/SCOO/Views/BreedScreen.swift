@@ -53,9 +53,9 @@ struct BreedScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { store.freezeLegacy(moments: moments) }
         .fullScreenCover(item: $hatching) { baby in
-            HatchView(breed: baby) { hatching = nil }
+            HatchView(breed: baby, rename: { try store.rename(baby.id, to: $0) }) { hatching = nil }
         }
-        .sheet(item: $showing) { baby in
+        .sheet(item: $showing, onDismiss: { store.load() }) { baby in
             BreedDetail(breed: baby, moments: moments)
         }
         .alert("알림", isPresented: Binding(get: { store.message != nil }, set: { if !$0 { store.message = nil } })) {
@@ -212,7 +212,8 @@ struct BreedScreen: View {
                         Button { showing = baby } label: {
                             VStack(spacing: 4) {
                                 BreedPortrait(breed: baby, stage: stage).frame(height: 84)
-                                Text(baby.title).font(.system(size: 10, weight: .medium)).lineLimit(1).minimumScaleFactor(0.7)
+                                Text(baby.name).font(.system(size: 11, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7)
+                                Text(baby.title).font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.7)
                                 Text((baby.origin.map { "\($0) 출신 · " } ?? "") + (stage == .bloom ? "만개 · LV.\(level)" : "\(stage.title) · LV.\(level)"))
                                     .font(.system(size: 9)).foregroundStyle(.secondary)
                             }
@@ -232,6 +233,8 @@ struct BreedScreen: View {
 
 private struct HatchView: View {
     let breed: Breed
+    /// Names the new baby (it already has a made-up name, so this can be skipped).
+    let rename: (String?) throws -> Void
     let done: () -> Void
     @State private var wobble = false
     @State private var cracked = false
@@ -248,7 +251,8 @@ private struct HatchView: View {
                     Text("태어났어요!").font(.title2.weight(.semibold))
                     Text(breed.title).font(.subheadline).foregroundStyle(.secondary)
                     if let drawNote { Text(drawNote).font(.caption2).foregroundStyle(.secondary) }
-                    Text("사진을 \(BreedRules.photosToGrowing)장 더 찍으면 성장, \(BreedRules.photosToGrow)장이면 데이지를 단 만개. 만개하면 다시 교배할 수 있어요.")
+                    NameEditor(fallback: breed.autoName, save: rename).frame(maxWidth: 300)
+                    Text("카메라에 띄워 두고 함께 찍으면 자라요. 레벨 \(FriendGrowth.growingLevel)에 성장기, \(FriendGrowth.bloomLevel)에 데이지를 단 만개. 만개하면 다시 교배할 수 있어요.")
                         .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
                     Button("반가워!") { done() }
                         .font(.headline).padding(.horizontal, 36).padding(.vertical, 12)
@@ -325,6 +329,8 @@ struct BreedDetail: View {
     let moments: Int
     @Environment(\.dismiss) private var dismiss
     @AppStorage("companion") private var companionRaw = ""
+    /// The name just given here (the passed-in record does not change).
+    @State private var given: String?
     @State private var drawing = false
     @State private var redrawn = false
     @State private var drawError: String?
@@ -349,7 +355,13 @@ struct BreedDetail: View {
             ScrollView {
                 VStack(spacing: 18) {
                     BreedPortrait(breed: breed, stage: stage).frame(width: 240, height: 240)
-                    Text(breed.title).font(.title3.weight(.semibold))
+                    Text(given ?? breed.name).font(.title3.weight(.semibold))
+                    Text(breed.title).font(.caption).foregroundStyle(.secondary)
+                    NameEditor(fallback: breed.autoName, current: breed.nickname) { name in
+                        try BreedStore().rename(breed.id, to: name)
+                        given = name ?? breed.autoName
+                    }
+                    .frame(maxWidth: 300)
                     if let generation = breed.generation, generation > 1 {
                         Text("\(generation)세대 · 교배종끼리 만나 태어났어요").font(.caption).foregroundStyle(.secondary)
                     }

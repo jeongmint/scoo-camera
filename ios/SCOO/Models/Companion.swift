@@ -64,7 +64,7 @@ enum Floater: Equatable {
     var name: String {
         switch self {
         case .friend(let species): return species.name
-        case .baby(let baby): return "아기 \(baby.title)"
+        case .baby(let baby): return baby.name
         }
     }
 

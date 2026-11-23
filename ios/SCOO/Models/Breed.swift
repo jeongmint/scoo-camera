@@ -31,6 +31,8 @@ struct Breed: Identifiable, Codable, Equatable {
     var experience: Int? = 0
     /// Photos taken while this baby floated.
     var together: Int? = 0
+    /// A name the user gave, kept on this iPhone only (a baby leaving in a bottle travels without it).
+    var nickname: String? = nil
 
     var key: String { "\(parentA)-\(parentB)" }
     /// Drawn baby, made with tools/breeding (`cutout --to-assets`).
@@ -40,6 +42,9 @@ struct Breed: Identifiable, Codable, Equatable {
     var mother: Species? { Species.find(shapeA ?? parentA) }
     var father: Species? { Species.find(colorB ?? parentB) }
     var title: String { "\(nameA ?? mother?.name ?? parentA) × \(nameB ?? father?.name ?? parentB)" }
+    /// The given name, or one made from the parents' names (멜로 × 루나 → 멜나).
+    var name: String { nickname ?? autoName }
+    var autoName: String { NameFilter.blend(mother?.name ?? parentA, father?.name ?? parentB) }
     /// How this baby is named when it becomes a parent itself.
     var parentID: String { "b_" + id.uuidString.lowercased().replacingOccurrences(of: "-", with: "").prefix(12) }
 
