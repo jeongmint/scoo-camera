@@ -76,6 +76,10 @@ actor SupabaseClient {
                 return "사진은 하루 50장까지 보낼 수 있어요."
             case .http(_, let body) where body.contains("photo not found"):
                 return "사진을 올리지 못했어요. 다시 보내 주세요."
+            case .http(_, let body) where body.contains("\"22023\""):
+                // The server refused a name (닉네임 거르기): its message is already written for people.
+                let json = try? JSONSerialization.jsonObject(with: Data(body.utf8)) as? [String: Any]
+                return json?["message"] as? String ?? "쓸 수 없는 이름이에요. 다른 이름으로 지어 주세요."
             case .http(429, _):
                 return "오늘은 새 그림을 충분히 그렸어요. 내일 또 그려 줄게요."
             case .http(_, let body) where body.lowercased().contains("anonymous sign-ins are disabled"):
