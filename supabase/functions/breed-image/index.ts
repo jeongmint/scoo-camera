@@ -11,6 +11,10 @@ const MODEL = Deno.env.get("BREED_IMAGE_MODEL") ?? "gpt-image-2.6-flare";
 const QUALITY = Deno.env.get("BREED_IMAGE_QUALITY") ?? "low";
 /** New pictures one account may ask for per day. Pictures that already exist are free. */
 const DAILY_LIMIT = Number(Deno.env.get("BREED_DAILY_LIMIT") ?? "20");
+/** Anonymous accounts are free to make, so they get fewer new pictures (linking Google or Kakao lifts it). */
+const ANON_DAILY_LIMIT = Number(Deno.env.get("BREED_ANON_DAILY_LIMIT") ?? "5");
+/** New pictures for all accounts together in a day, so many new accounts cannot run up the bill. */
+const TOTAL_DAILY_LIMIT = Number(Deno.env.get("BREED_TOTAL_DAILY_LIMIT") ?? "300");
 const BUCKET = "breeds";
 
 // The user's breeding prompt, word for word. Image 1 = parent A, image 2 = parent B.
@@ -90,7 +94,10 @@ Deno.serve(async (req) => {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const { count } = await admin.from("breed_generations").select("id", { count: "exact", head: true })
     .eq("user_id", user.id).gte("created_at", since);
-  if ((count ?? 0) >= DAILY_LIMIT) return json({ error: "daily limit reached" }, 429);
+  if ((count ?? 0) >= (user.is_anonymous ? ANON_DAILY_LIMIT : DAILY_LIMIT)) return json({ error: "draw limit reached" }, 429);
+  const { count: everyone } = await admin.from("breed_generations").select("id", { count: "exact", head: true })
+    .gte("created_at", since);
+  if ((everyone ?? 0) >= TOTAL_DAILY_LIMIT) return json({ error: "busy today" }, 429);
 
   const key = Deno.env.get("OPENAI_API_KEY");
   if (!key) return json({ error: "OPENAI_API_KEY is not set" }, 500);

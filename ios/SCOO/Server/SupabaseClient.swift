@@ -54,6 +54,12 @@ actor SupabaseClient {
             switch self {
             case .notConfigured:
                 return "서버 키가 아직 설정되지 않았어요."
+            case .http(_, let body) where body.contains("draw limit reached"):
+                return "오늘 그릴 수 있는 새 그림을 다 썼어요. 내일 또 그려 줄게요. Google·카카오로 계정을 이어 두면 하루에 더 많이 그릴 수 있어요."
+            case .http(_, let body) where body.contains("busy today"):
+                return "오늘은 그림 요청이 많아서 쉬는 중이에요. 내일 다시 해 주세요."
+            case .http(_, let body) where body.contains("too many tries"):
+                return "오늘은 친구 코드를 너무 많이 넣었어요. 내일 다시 해 주세요."
             case .http(_, let body) where body.contains("daily limit reached"):
                 return "유리병은 하루에 한 번 띄울 수 있어요."
             case .http(_, let body) where body.contains("no such code"):
