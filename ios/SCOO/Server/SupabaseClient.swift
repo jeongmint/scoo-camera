@@ -62,6 +62,12 @@ actor SupabaseClient {
                 return "내 친구 코드예요. 친구의 코드를 넣어 주세요."
             case .http(_, let body) where body.contains("not friends"):
                 return "친구가 된 뒤에 편지를 보낼 수 있어요."
+            case .http(_, let body) where body.contains("suspended until"):
+                // 신고 처리로 보내기가 잠시 멈춘 계정 (the server says until which day).
+                let day = body.range(of: #"\d{4}-\d{2}-\d{2}"#, options: .regularExpression).map { String(body[$0]) }
+                return "운영 규칙을 어긴 편지가 있어서 \(day.map { "\($0)까지 " } ?? "잠시 ")편지와 친구 요청을 보낼 수 없어요."
+            case .http(_, let body) where body.contains("operators only"):
+                return "운영자만 할 수 있어요."
             case .http(_, let body) where body.contains("slow down"):
                 return "편지를 너무 빨리 보내고 있어요. 잠시 뒤에 보내 주세요."
             case .http(_, let body) where body.lowercased().contains("provider is not enabled") || body.contains("provider_disabled"):
