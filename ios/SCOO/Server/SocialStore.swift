@@ -111,6 +111,7 @@ final class SocialStore: ObservableObject {
             switch result {
             case "friends": return "친구가 됐어요! 이제 편지를 보낼 수 있어요."
             case "already": return "이미 친구예요."
+            case "not_found": return "그 코드를 가진 친구를 찾지 못했어요."
             default: return "친구 요청을 보냈어요. 상대가 받아 주면 친구가 돼요."
             }
         } catch {

@@ -18,6 +18,10 @@ const ENDPOINT = PROVIDER === "gemini"
 // gpt-5.4-mini with no reasoning answers in about a second (2026-11-17), quick enough for back-and-forth talk.
 const MODEL = Deno.env.get("PET_CHAT_MODEL") ?? (PROVIDER === "gemini" ? "gemini-flash-lite-latest" : "gpt-5.4-mini");
 const DAILY_LIMIT = Number(Deno.env.get("PET_CHAT_DAILY_LIMIT") ?? "300");
+/** Anonymous accounts are free to make, so they get fewer replies (linking Google or Kakao lifts it). */
+const ANON_DAILY_LIMIT = Number(Deno.env.get("PET_CHAT_ANON_DAILY_LIMIT") ?? "100");
+/** All accounts together per day: past it, replies come from the phone's own lines and nothing is spent. */
+const TOTAL_DAILY_LIMIT = Number(Deno.env.get("PET_CHAT_TOTAL_DAILY_LIMIT") ?? "3000");
 const MOODS = ["smile", "surprised", "awe", "yum", "normal"];
 
 const json = (body: unknown, status = 200) =>
@@ -25,11 +29,13 @@ const json = (body: unknown, status = 200) =>
 
 const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-/** The user id (`sub`) of a signed-in user's access token; anonymous keys and service keys are refused. */
-function subject(header: string): string | null {
+/** The signed-in user of an access token (`sub`, and whether it is an anonymous account); the project's anon
+ *  key and service keys are refused. */
+function subject(header: string): { id: string; anonymous: boolean } | null {
   try {
     const payload = JSON.parse(atob(header.replace(/^Bearer\s+/i, "").split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
-    return payload.role === "authenticated" && typeof payload.sub === "string" ? payload.sub : null;
+    if (payload.role !== "authenticated" || typeof payload.sub !== "string") return null;
+    return { id: payload.sub, anonymous: payload.is_anonymous === true };
   } catch {
     return null;
   }
@@ -58,8 +64,8 @@ Deno.serve(async (req) => {
   if (!key) return json({ error: `${keyName} is not set` }, 500);
 
   // The gateway already verified the JWT (verify_jwt on), so its subject can be read without another round trip.
-  const userId = subject(req.headers.get("Authorization") ?? "");
-  if (!userId) return json({ error: "sign in first" }, 401);
+  const user = subject(req.headers.get("Authorization") ?? "");
+  if (!user) return json({ error: "sign in first" }, 401);
 
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return json({ error: "bad json" }, 400); }
@@ -70,8 +76,14 @@ Deno.serve(async (req) => {
   const personality = clip(body.personality, 20) || "다정함";
   const history = Array.isArray(body.history) ? body.history.slice(-6) : [];
 
-  // Count this reply while the model thinks; over the limit, the answer is thrown away.
-  const counted = admin.rpc("count_pet_reply", { p_user: userId });
+  // Count this reply before asking the model, so nothing is spent past this account's or everyone's limit.
+  const { data: taken, error: takeError } = await admin.rpc("take_pet_reply", {
+    p_user: user.id,
+    p_limit: user.anonymous ? ANON_DAILY_LIMIT : DAILY_LIMIT,
+    p_everyone: TOTAL_DAILY_LIMIT,
+  });
+  if (takeError) return json({ error: takeError.message }, 500);
+  if (taken !== "ok") return json({ error: taken === "mine" ? "talk limit reached" : "busy today" }, 429);
 
   const messages: { role: string; content: string }[] = [{ role: "system", content: system(pet, kind, personality) }];
   for (const turn of history) {
@@ -99,9 +111,6 @@ Deno.serve(async (req) => {
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify(request),
   });
-  const { data: count, error: countError } = await counted;
-  if (countError) return json({ error: countError.message }, 500);
-  if (typeof count === "number" && count > DAILY_LIMIT) return json({ error: "daily limit reached" }, 429);
   if (!answer.ok) return json({ error: `${PROVIDER} ${answer.status}`, detail: (await answer.text()).slice(0, 300) }, 502);
   const data = await answer.json();
   const content: string = data?.choices?.[0]?.message?.content ?? "";
