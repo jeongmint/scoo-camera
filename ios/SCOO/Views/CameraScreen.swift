@@ -19,7 +19,7 @@ struct CameraScreen: View {
     @AppStorage("companion") private var companionRaw = ""
     @ObservedObject private var friends = FriendStore.shared
     /// Bred babies, which can float too (and then grow by themselves).
-    @StateObject private var babies = BreedStore()
+    @ObservedObject private var babies = BreedStore.shared
     /// Whether the floating friend is also drawn into the photo, or only floats on screen.
     @AppStorage("companionInPhoto") private var companionInPhoto = true
     /// Leave each photo's spot on the map guestbook.

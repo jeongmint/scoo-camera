@@ -49,11 +49,7 @@ enum WidgetBridge {
         let raw = UserDefaults.standard.string(forKey: "companion") ?? ""
         let picked = Species.find(raw)
         // A floating bred baby leads the widget too.
-        let floatingBaby: Breed? = Floater.babyID(raw).flatMap { id in
-            let babies = BreedStore()
-            babies.load()
-            return babies.breeds.first { $0.id == id }
-        }
+        let floatingBaby: Breed? = Floater.babyID(raw).flatMap { id in BreedStore.shared.breeds.first { $0.id == id } }
         // Everyone grows by themselves; 기본 모리 keeps the garden's EXP.
         let growth = GrowthRules.growth(for: floatingBaby?.xp(moments: garden.moments) ?? picked.flatMap { ownFriend($0)?.xp } ?? garden.experience)
         let sidekick = picked == friend ? nil : friend
@@ -75,11 +71,7 @@ enum WidgetBridge {
         WidgetCenter.shared.reloadAllTimelines()
     }
 
-    private static func latestBaby() -> Breed? {
-        let url = PhotoRepository.directory.appendingPathComponent("breeds.json")
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        return (try? JSONDecoder().decode([Breed].self, from: data))?.first
-    }
+    private static func latestBaby() -> Breed? { BreedStore.shared.breeds.first }
 
     /// Widgets must stay small in memory, so images are rendered at a fixed small size.
     private static func writeImage<Content: View>(_ content: Content, as name: String, side: CGFloat = imageSide) {

@@ -4,6 +4,14 @@ import Combine
 /// Babies are kept in their own file next to the garden, so the garden index format stays untouched.
 @MainActor
 final class BreedStore: ObservableObject {
+    /// The one store every screen shares, so a baby named or grown on one screen shows the same everywhere.
+    /// (Tests make their own with `init(directory:)`.)
+    static let shared: BreedStore = {
+        let store = BreedStore()
+        store.load()
+        return store
+    }()
+
     @Published private(set) var breeds: [Breed] = []
     @Published var message: String?
     private let url: URL

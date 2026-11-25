@@ -6,7 +6,7 @@ import UIKit
 /// With the server configured the other side is real people; otherwise it is simulated on this device (`LocalOcean`).
 struct BottleScreen: View {
     @EnvironmentObject private var garden: GardenStore
-    @StateObject private var breeds = BreedStore()
+    @ObservedObject private var breeds = BreedStore.shared
     @StateObject private var bottles = BottleStore.preferred()
     @ObservedObject private var friends = FriendStore.shared
     @StateObject private var locator = DistrictLocator()
@@ -346,7 +346,7 @@ private struct AdoptedSheet: View {
                 BreedPortrait(breed: baby).frame(width: 200, height: 200)
                 Text("\(baby.origin ?? "어딘가")에서 온 아이").font(.title3.weight(.semibold))
                 Text(baby.title).font(.subheadline).foregroundStyle(.secondary)
-                NameEditor(fallback: baby.autoName) { try BreedStore().rename(baby.id, to: $0) }.frame(maxWidth: 300)
+                NameEditor(fallback: baby.autoName) { try BreedStore.shared.rename(baby.id, to: $0) }.frame(maxWidth: 300)
                 Text("우리 아기들에 들어왔어요. 카메라에 띄워 두고 함께 찍으면 자라서, 레벨 \(FriendGrowth.growingLevel)에 성장기, \(FriendGrowth.bloomLevel)에 데이지를 단 만개가 돼요.")
                     .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
             case .character(let species):
