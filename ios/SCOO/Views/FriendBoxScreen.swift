@@ -8,7 +8,7 @@ struct FriendBoxScreen: View {
     @ObservedObject private var friends = FriendStore.shared
     @AppStorage("companion") private var companionRaw = ""
     @State private var picked: OwnedFriend?
-    @StateObject private var breeds = BreedStore()
+    @ObservedObject private var breeds = BreedStore.shared
     @State private var baby: Breed?
 
     private var moments: Int { garden.snapshot.moments }

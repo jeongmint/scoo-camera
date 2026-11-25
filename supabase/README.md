@@ -137,3 +137,7 @@ python3 scripts/generate_xcodeproj.py --paid-team
 
 로컬에서는 `tests/local_storage_stubs.sql`(Storage 흉내)을 스텁 다음에 실행해요.
 | `20261118000500_nickname_names` | 랜덤 이름에 쓰는 캐릭터 이름을 지금 목록(야구공 → 도도, 새 친구들)으로 | — |
+
+## 이름에 못 쓰는 말
+
+닉네임 확인(`nickname_problem`)에 쓰는 말 목록은 저장소의 `shared/blocked_words.txt`에서 만들어요. 목록을 고치면 `python3 scripts/sync_blocked_words.py --migration`으로 새 마이그레이션을 만들어 적용하세요. 이미 적용한 마이그레이션은 고치지 않아요.

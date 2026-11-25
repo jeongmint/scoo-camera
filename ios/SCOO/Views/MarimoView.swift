@@ -158,9 +158,7 @@ struct GardenScreen: View {
         guard let id = Floater.babyID(companionRaw) else {
             return floatingFriend.map { FriendStore.shared.friend(for: $0.id)?.name ?? $0.name }
         }
-        let babies = BreedStore()
-        babies.load()
-        return babies.breeds.first { $0.id == id }?.name
+        return BreedStore.shared.breeds.first { $0.id == id }?.name
     }
 
     var body: some View {

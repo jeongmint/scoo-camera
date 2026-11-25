@@ -140,6 +140,8 @@ xcodebuild -project ios/SCOO.xcodeproj -scheme SCOO \
   CODE_SIGNING_ALLOWED=NO build
 ```
 
+이름에 못 쓰는 말은 `shared/blocked_words.txt` 한 곳에만 적어요. 고친 뒤 `python3 scripts/sync_blocked_words.py --migration`을 돌리면 앱 목록(`NameFilter.swift`)을 맞추고 서버에 적용할 새 마이그레이션을 만들어 줘요. 아무 옵션 없이 돌리면 앱과 서버 목록이 같은지만 확인해요.
+
 프로젝트 파일은 생성기로 만들어요. Xcode에서 바꾼 프로젝트 설정은 다시 만들기 전에 생성기에도 넣어 주세요.
 
 ## 보관과 권한

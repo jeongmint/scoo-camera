@@ -22,15 +22,18 @@ enum NameFilter {
 
     /// Words that cannot appear anywhere in a name, after spaces, digits and marks are taken out
     /// ("시 1 발" is caught as "시발"). Lowercase for English.
+    /// Edit shared/blocked_words.txt, not this list; the server checks nicknames with the same words.
+    // BEGIN blocked words: generated from shared/blocked_words.txt by scripts/sync_blocked_words.py
     static let blocked: [String] = [
-        "시발", "씨발", "씨바", "씨빨", "시빨", "쓰발", "쌍놈", "썅", "병신", "븅신", "빙신", "지랄", "개새", "개색",
-        "새끼", "섀끼", "좆", "존나", "졸라", "니미", "느금", "애미", "애비", "엠창", "미친", "미췬", "닥쳐", "꺼져",
-        "뒤져", "뒈져", "죽어", "죽일", "자살", "섹스", "쎅스", "섹시", "야동", "자지", "보지", "꼬추", "성기", "강간",
-        "창녀", "창놈", "걸레", "화냥", "매춘", "원조교제", "한남충", "김치녀", "틀딱", "급식충", "맘충", "정신병",
-        "변태", "노예", "마약", "대마", "필로폰", "운영자", "관리자",
-        "fuck", "fck", "shit", "bitch", "sex", "porn", "dick", "cock", "pussy", "cunt", "nigg", "fag", "rape",
-        "slut", "whore", "nazi", "hitler",
+        "시발", "씨발", "씨바", "씨빨", "시빨", "쓰발", "쌍놈", "썅", "병신", "븅신", "빙신", "지랄",
+        "개새", "개색", "새끼", "섀끼", "좆", "존나", "졸라", "니미", "느금", "애미", "애비", "엠창",
+        "미친", "미췬", "닥쳐", "꺼져", "뒤져", "뒈져", "죽어", "죽일", "자살", "섹스", "쎅스", "섹시",
+        "야동", "자지", "보지", "꼬추", "성기", "강간", "창녀", "창놈", "걸레", "화냥", "매춘", "원조교제",
+        "한남충", "김치녀", "틀딱", "급식충", "맘충", "정신병", "변태", "노예", "마약", "대마", "필로폰", "운영자",
+        "관리자", "fuck", "fck", "shit", "bitch", "sex", "porn", "dick", "cock", "pussy", "cunt", "nigg",
+        "fag", "rape", "slut", "whore", "nazi", "hitler",
     ]
+    // END blocked words
 
     /// Trimmed, with runs of spaces made one.
     static func clean(_ raw: String) -> String {

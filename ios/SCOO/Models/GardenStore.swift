@@ -97,8 +97,7 @@ final class GardenStore: ObservableObject {
     /// nil, or one that has left = 기본 모리. Returns the EXP gained.
     func add(_ photo: ProcessedPhoto, filter: FilmLook, mode: CaptureMode, location: PhotoLocation? = nil, extra: Int = 0,
              video: URL? = nil, friend: String? = nil) async throws -> Int {
-        let babies = BreedStore()
-        babies.load()
+        let babies = BreedStore.shared
         let grower = friend.flatMap { Floater.resolve($0, owns: { FriendStore.shared.owns($0) }, babies: babies.breeds) }
         let moments = snapshot.moments
         snapshot = try await repository.add(photo, filter: filter, mode: mode, location: location, extra: extra, video: video,

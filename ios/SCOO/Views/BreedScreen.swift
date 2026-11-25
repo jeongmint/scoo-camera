@@ -5,7 +5,7 @@ import UIKit
 /// Babies grow into adults with a daisy after `BreedRules.photosToGrow` more photos.
 struct BreedScreen: View {
     @EnvironmentObject private var garden: GardenStore
-    @StateObject private var store = BreedStore()
+    @ObservedObject private var store = BreedStore.shared
     @ObservedObject private var friends = FriendStore.shared
     @AppStorage("unlockAllFriends") private var unlockAll = false
     @State private var parentA: String?
@@ -358,7 +358,7 @@ struct BreedDetail: View {
                     Text(given ?? breed.name).font(.title3.weight(.semibold))
                     Text(breed.title).font(.caption).foregroundStyle(.secondary)
                     NameEditor(fallback: breed.autoName, current: breed.nickname) { name in
-                        try BreedStore().rename(breed.id, to: name)
+                        try BreedStore.shared.rename(breed.id, to: name)
                         given = name ?? breed.autoName
                     }
                     .frame(maxWidth: 300)
