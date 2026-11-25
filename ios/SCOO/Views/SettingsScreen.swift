@@ -161,6 +161,13 @@ struct SettingsScreen: View {
     private var testTools: some View {
         Form {
                 Section {
+                    NavigationLink { OperatorReportsScreen() } label: {
+                        Label("신고 처리", systemImage: "exclamationmark.bubble")
+                    }
+                } footer: {
+                    Text("신고된 편지를 보고, 그대로 두거나 지우거나 보낸 사람을 7일 동안 멈출 수 있어요.")
+                }.listRowBackground(Glass.row)
+                Section {
                     LabeledContent("지금 동네", value: Regions.resolve(districtRaw)?.title ?? (districtRaw.isEmpty ? "정해지지 않음" : districtRaw))
                     LabeledContent("첫 친구", value: friends.starter?.character?.name ?? "아직 없음")
                     LabeledContent("가진 친구", value: "\(friends.friends.count)마리")
